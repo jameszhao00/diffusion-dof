@@ -189,16 +189,6 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
 	cam_dist = 100;
 	
-	cout<<"window handle = " << window.handle<<endl;
-	
-	D3D11_RASTERIZER_DESC wireframe_desc; 
-	wireframe_desc.FillMode = D3D11_FILL_WIREFRAME; 
-	wireframe_desc.CullMode = D3D11_CULL_BACK;
-	
-	
-	d3d.device->CreateRasterizerState ( &wireframe_desc , &wireframe_rasterizer ); 
-	
-
 	CD3D11_BLEND_DESC  additive_blend_state_desc(D3D11_DEFAULT);
 	additive_blend_state_desc.RenderTarget[0].BlendEnable = true;
 	additive_blend_state_desc.IndependentBlendEnable = false;
@@ -214,23 +204,7 @@ void GfxDemo::init(HINSTANCE instance)
 	d3d.immediate_ctx->OMGetDepthStencilState(&ds_state, nullptr);
 	d3d.device->CreateDepthStencilState(&ds_desc, &inverted_ds_state);
 
-
-	D3D11_SAMPLER_DESC sampler_desc = 
-	{		
-		D3D11_FILTER_ANISOTROPIC,
-		D3D11_TEXTURE_ADDRESS_BORDER,
-		D3D11_TEXTURE_ADDRESS_BORDER,
-		D3D11_TEXTURE_ADDRESS_BORDER,
-		0,
-		16,
-		D3D11_COMPARISON_NEVER,
-		0,0,0,0,
-		-FLT_MAX,
-		FLT_MAX
-	};
-
-	d3d.device->CreateSamplerState(&sampler_desc, &sampler.p);
-
+	
 	cout<<"window handle = " << window.handle<<endl;
     
 }
@@ -320,7 +294,6 @@ void GfxDemo::frame()
 		resize(&debug_rtv[2], &(debug_srv[2]), window.size().cx, window.size().cy, &debug[2]);
 	}
 
-	d3d.immediate_ctx->PSSetSamplers(0, 1, &sampler.p);
 	dt += 0.001f;
 	float color[4] = {0, 0, 0.0f, 0};
 	float neg_one[4] = {-1, -1, -1, -1};

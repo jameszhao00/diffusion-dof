@@ -48,8 +48,6 @@ struct GfxDemo
 	CComPtr<ID3D11Buffer> object_cb;
 	CComPtr<ID3D11Buffer> object_animation_cb;
 	CComPtr<ID3D11Buffer> gbuffer_debug_cb;
-	CComPtr<ID3D11RasterizerState> wireframe_rasterizer; 
-	CComPtr<ID3D11SamplerState> sampler; 
 	
 
 	ID3D11ShaderResourceView* vb_srv;
