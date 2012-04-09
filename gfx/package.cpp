@@ -230,7 +230,7 @@ namespace package
 		int written_textures_count = 0;
 		int written_animations_count = 0;
 		ilInit();
-		ILuint tex_id;
+
 		for(auto model : *models)
 		{
 			write_mesh(out, model, written_animations_count, written_materials_count);

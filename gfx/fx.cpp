@@ -21,10 +21,11 @@ void build_gaussian_params(float sigma,
 	double sample_uv_size = (1.0f / (double)texture_size);
 	//cutoff INCLUSIVE!
 	//if cutoff says 9 it's saying there's 10 weights
-	int cutoff = ceil(sigma * CUTOFF_MULTIPLIER);
-	int texture_samples = 1 + ceil(cutoff / 2.0);
-	int weights_count = (texture_samples - 1) * 2 + 1;
+	int cutoff = (int)ceil(sigma * CUTOFF_MULTIPLIER);
+	int texture_samples = 1 + (int)ceil(cutoff / 2.0);
 	assert(texture_samples < MAX_TEXTURE_SAMPLES);
+	assert(texture_samples > 1);
+	int weights_count = (texture_samples - 1) * 2 + 1;
 	*offset_count = texture_samples;
 	//DEAL WITH VP SIZE!
 	double* weights = new double[weights_count];
@@ -39,7 +40,7 @@ void build_gaussian_params(float sigma,
 	}
 	//do sample 0
 	//offsets[0] = 0; //the original pixel's offset is implicit...
-	norms[0] = weights[0] / total_weight;
+	norms[0] = (float)(weights[0] / total_weight);
 	offsets[0] = 0; //writing this b/c of packing rules
 	//start at sample 1..
 	assert(texture_samples > 1);
@@ -52,6 +53,7 @@ void build_gaussian_params(float sigma,
 		offsets[i] = (float)(sample_uv_size * pix_offset);
 		norms[i] = (float)((w_a + w_b) / total_weight);
 	}
+	delete [] weights;
 #ifdef DEBUG
 	float norm_sum = norms[0];
 	for(int i = 1; i < texture_samples; i++) norm_sum += 2 * norms[i];
@@ -138,6 +140,7 @@ namespace fx
 
 	void make_gen_gbuffer_ctx(Gfx* gfx, out GenGBufferContext* ctx)
 	{
+		assert(false); //create a destroy() pair
 		gfx->create_shaders_and_il(L"shaders/standard_animated.hlsl", 
 			&ctx->vs, 
 			&ctx->ps, 
@@ -157,7 +160,7 @@ namespace fx
 		assert(false);
 	}
 
-	void make_shade_gbuffer_ctx(Gfx* gfx, out ShadeGBufferContext* ctx)
+	void make_shade_gbuffer_ctx(Gfx* gfx, out FXContext* ctx)
 	{
 		gfx->create_shaders_and_il(L"shaders/shade_gbuffer.hlsl", 
 			&ctx->vs, 
@@ -170,7 +173,7 @@ namespace fx
 	}
 	void shade_gbuffer(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
-		const ShadeGBufferContext* fx_ctx,
+		const FXContext* fx_ctx,
 		in Resource* albedo, 
 		in Resource* normal,
 		in Resource* depth,
@@ -190,7 +193,7 @@ namespace fx
 		gfx->immediate_ctx->PSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
 
 		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
 			&gpu_env->zero);
 
 		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
@@ -200,10 +203,10 @@ namespace fx
 
 	}
 
-	void make_bloom_ctx(Gfx* gfx, out BloomContext* ctx) { }
+	void make_bloom_ctx(Gfx* gfx, out FXContext* ctx) { }
 	void bloom(Gfx* gfx, 
 		const GpuEnvironment* env,
-		const BloomContext* fx_ctx,
+		const FXContext* fx_ctx,
 		in Resource* input,
 		out Target* output);
 
@@ -253,14 +256,14 @@ namespace fx
 			&blur_cb_data.offsets_count[0]);
 
 		gfx->sync_to_cbuffer(fx_ctx->uniforms, blur_cb_data);
-		gfx->immediate_ctx->PSSetSamplers(0, 1, &gpu_env->linear_sampler);
-		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms);
+		gfx->immediate_ctx->PSSetSamplers(0, 1, &gpu_env->linear_sampler.p);
+		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms.p);
 
 		
 
 		
 		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
 			&gpu_env->zero);
 
 		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
@@ -269,7 +272,7 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
-	void make_lum_highpass_ctx(Gfx* gfx, out LumHighpassContext* ctx)
+	void make_lum_highpass_ctx(Gfx* gfx, out FXContext* ctx)
 	{		
 		gfx->create_shaders_and_il(L"shaders/lum_highpass.hlsl", 
 			&ctx->vs, &ctx->ps);
@@ -277,7 +280,7 @@ namespace fx
 	}
 	void lum_highpass(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
-		const LumHighpassContext* fx_ctx,
+		const FXContext* fx_ctx,
 		float min_lum,
 		in Resource* input,
 		out Target* output)
@@ -291,9 +294,9 @@ namespace fx
 
 		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
-		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms);
+		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms.p);
 		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
 			&gpu_env->zero);
 
 		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
@@ -310,14 +313,14 @@ namespace fx
 		gfx->sync_to_cbuffer(gpu_env->fsquad_uniforms, *fsquad_cb_data);
 	}
 	
-	void make_additive_blend_ctx(Gfx* gfx, out AdditiveBlendContext* ctx)
+	void make_additive_blend_ctx(Gfx* gfx, out FXContext* ctx)
 	{		
 		gfx->create_shaders_and_il(L"shaders/additive_blend.hlsl", 
 			&ctx->vs, &ctx->ps);
 	}
 	void additive_blend(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
-		const AdditiveBlendContext* fx_ctx,
+		const FXContext* fx_ctx,
 		in Resource* a,
 		in Resource* b,
 		out Target* target)
@@ -329,13 +332,12 @@ namespace fx
 		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
 
 		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
 			&gpu_env->zero);
 
 		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
 		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
 	
-		float default_blend_factors[4]; 
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 	
@@ -357,7 +359,7 @@ namespace fx
 		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 
 		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
 			&gpu_env->zero);
 
 		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);

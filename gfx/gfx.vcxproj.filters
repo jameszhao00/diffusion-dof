@@ -45,9 +45,6 @@
     <ClInclude Include="fbx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="shaders\shader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="fx.h">
       <Filter>fx</Filter>
     </ClInclude>

@@ -105,14 +105,14 @@ void D3D::init(Window & window)
 	swap_chain_desc = make_swap_chain_desc(window);
 
 	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, 
-									NULL, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain, 
-									&device, NULL, &immediate_ctx);
+									NULL, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
+									&device.p, NULL, &immediate_ctx.p);
 		
 	window.resize_callback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
 
 	ID3D11Texture2D * back_buffer;
 	swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
-	device->CreateRenderTargetView(back_buffer, NULL, &back_buffer_rtv);
+	device->CreateRenderTargetView(back_buffer, NULL, &back_buffer_rtv.p);
 	back_buffer->Release();
 
 
@@ -124,8 +124,8 @@ void D3D::init(Window & window)
 	auto depth_dsv_desc = make_depth_dsv_desc();
 	auto depth_srv_desc = make_depth_srv_desc();
 
-	device->CreateDepthStencilView(depth_texture, &depth_dsv_desc, &dsv);
-	device->CreateShaderResourceView(depth_texture, &depth_srv_desc, &depth_srv);
+	device->CreateDepthStencilView(depth_texture, &depth_dsv_desc, &dsv.p);
+	device->CreateShaderResourceView(depth_texture, &depth_srv_desc, &depth_srv.p);
 		
 
 	depth_texture->Release();
@@ -164,13 +164,13 @@ void D3D::window_resized(const Window * window)
 		if (back_buffer_rtv)
         {
 			//NOTE: not calling release on IUnknown, but CComPtr
-            back_buffer_rtv->Release();
+            back_buffer_rtv.Release();
             back_buffer_rtv = nullptr;
         }
         if (dsv)
         {
-            dsv->Release();
-			depth_srv->Release();
+            dsv.Release();
+			depth_srv.Release();
             dsv = nullptr;
         }
 
@@ -197,8 +197,8 @@ void D3D::window_resized(const Window * window)
 			auto depth_dsv_desc = make_depth_dsv_desc();
 			auto depth_srv_desc = make_depth_srv_desc();
 
-			device->CreateDepthStencilView(depth_buffer, &depth_dsv_desc, &dsv);			
-			device->CreateShaderResourceView(depth_buffer, &depth_srv_desc, &depth_srv);
+			device->CreateDepthStencilView(depth_buffer, &depth_dsv_desc, &dsv.p);			
+			device->CreateShaderResourceView(depth_buffer, &depth_srv_desc, &depth_srv.p);
             depth_buffer->Release();
 
 			set_viewport(window->size());
@@ -287,7 +287,11 @@ namespace d3d
 			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG, 0, 0, &shader_bin, &error_bin, nullptr);
 		if((error_bin != nullptr) || FAILED(hr))
 		{
-			const char * msg = (const char *) error_bin->GetBufferPointer();
+			const char * msg = nullptr;
+			if(error_bin != nullptr)
+			{
+				msg = (const char *) error_bin->GetBufferPointer();
+			}
 			assert(false);
 		}
 		

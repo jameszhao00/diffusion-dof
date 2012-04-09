@@ -108,12 +108,12 @@ struct D3D
 		ID3D11InputLayout** il = nullptr,
 		gfx::VertexTypes type = gfx::eUnknown);
 
-	IDXGISwapChain* swap_chain;
-	ID3D11Device* device;
-	ID3D11DeviceContext* immediate_ctx;
-	ID3D11RenderTargetView* back_buffer_rtv;
-	ID3D11DepthStencilView* dsv;
-	ID3D11ShaderResourceView* depth_srv;
+	CComPtr<IDXGISwapChain> swap_chain;
+	CComPtr<ID3D11Device> device;
+	CComPtr<ID3D11DeviceContext> immediate_ctx;
+	CComPtr<ID3D11RenderTargetView> back_buffer_rtv;
+	CComPtr<ID3D11DepthStencilView> dsv;
+	CComPtr<ID3D11ShaderResourceView> depth_srv;
 	DXGI_SWAP_CHAIN_DESC swap_chain_desc;
 	D3D11_TEXTURE2D_DESC depth_stencil_desc;
 private:	

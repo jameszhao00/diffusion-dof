@@ -12,71 +12,65 @@ using namespace DirectX;
 #define inout
 #define out
 
-
+int getref(IUnknown* ptr)
+{
+	ptr->AddRef();
+	return ptr->Release();
+}
 void resize(ID3D11Texture2D** texture,
+			ID3D11Device* device,
 			int w, int h)
 {	
-
+	
 	string name = d3d::name(*texture);
 	D3D11_TEXTURE2D_DESC tex2d_desc;
-	(*texture)->GetDesc(&tex2d_desc);	
-	ID3D11Device* device;
-	(*texture)->GetDevice(&device);
+	(*texture)->GetDesc(&tex2d_desc);
 	(*texture)->Release();
 	
 	
 	tex2d_desc.Width = w;
 	tex2d_desc.Height = h;
 	device->CreateTexture2D(&tex2d_desc, nullptr, texture);
-	d3d::name(*texture, name);
-	device->Release();
+	d3d::name(*texture, name);	
 }
 
 void resize(ID3D11RenderTargetView** rtv, 
-			ID3D11ShaderResourceView** srv,			
-			int w, int h,
-			ID3D11Texture2D** original_tex = nullptr)
+			ID3D11ShaderResourceView** srv,	
+			ID3D11Texture2D** texture,
+			ID3D11Device* device,
+			int w, int h)
 {	
 	//the release()s call procedure is not working
 	assert((rtv != nullptr) && (srv != nullptr));
-	ID3D11Texture2D* texture;
 	D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
 	
 	string rtv_name = d3d::name(*rtv);
 	string srv_name = d3d::name(*srv);
 
-	ID3D11Device* device;
-	(*rtv)->GetDevice(&device);
+		int r = getref(device);
 
-	(*rtv)->GetResource((ID3D11Resource**)&texture);
 	(*rtv)->GetDesc(&rtv_desc);
 	(*rtv)->Release();
 	(*rtv) = nullptr;
 	
+	int	r2  = getref(device);
 	D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
 		
-	//can't call again.. adding ref too many times...
-	//(*srv)->GetResource((ID3D11Resource**)&texture);
 	(*srv)->GetDesc(&srv_desc);
 	(*srv)->Release();
 	(*srv) = nullptr;
-	if(original_tex != nullptr)
-	{
-		resize(original_tex, w, h);
-		texture = *original_tex;
-	}
-	else
-	{
-		resize(&texture, w, h);
-	}
+	int	r3  = getref(device);
 
-	device->CreateRenderTargetView(texture, &rtv_desc, rtv);
-	device->CreateShaderResourceView(texture, &srv_desc, srv);
+	resize(texture, device, w, h);
 
+	device->CreateRenderTargetView(*texture, &rtv_desc, rtv);
+	device->CreateShaderResourceView(*texture, &srv_desc, srv);
+	
+	int	r4  = getref(device);
 	d3d::name(*rtv, rtv_name);
 	d3d::name(*srv, srv_name);
 
-	device->Release();
+	int	r5  = getref(device);
 }
 void GfxDemo::init_gbuffers(int w, int h)
 {	
@@ -90,9 +84,6 @@ void GfxDemo::init_gbuffers(int w, int h)
 	desc.SampleDesc.Quality = 0;
 	desc.MipLevels = 1;
 	desc.Usage = D3D11_USAGE_DEFAULT;
-	ID3D11Texture2D* normal;
-	ID3D11Texture2D* albedo;
-
 
 	desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	d3d.device->CreateTexture2D(&desc, nullptr, &normal);
@@ -106,11 +97,11 @@ void GfxDemo::init_gbuffers(int w, int h)
 	//DEBUG[1, 2] is NOT MSAA
 	
 
-	d3d::name(normal, "normal");
-	d3d::name(albedo, "albedo");
-	d3d::name(debug[0], "debug 0");
-	d3d::name(debug[1], "debug 1");
-	d3d::name(debug[2], "debug 2");
+	d3d::name(normal.p, "normal");
+	d3d::name(albedo.p, "albedo");
+	d3d::name(debug[0].p, "debug 0");
+	d3d::name(debug[1].p, "debug 1");
+	d3d::name(debug[2].p, "debug 2");
 
 	d3d.device->CreateRenderTargetView(normal, nullptr, &normal_rtv);
 	d3d.device->CreateRenderTargetView(albedo, nullptr, &albedo_rtv);
@@ -123,65 +114,49 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d.device->CreateShaderResourceView(debug[1], nullptr, &debug_srv[1]);
 	d3d.device->CreateShaderResourceView(debug[2], nullptr, &debug_srv[2]);
 	
-	d3d::name(normal_rtv, "normal");
-	d3d::name(albedo_rtv, "albedo");
-	d3d::name(debug_rtv[0], "debug");
-	d3d::name(debug_rtv[1], "debug");
-	d3d::name(debug_rtv[2], "debug");
-	d3d::name(normal_srv, "normal");
-	d3d::name(albedo_srv, "albedo");
-	d3d::name(debug_srv[0], "debug");
-	d3d::name(debug_srv[1], "debug");
-	d3d::name(debug_srv[2], "debug");
-
-	normal->Release();
-	albedo->Release();
-	//debug[0]->Release();
-	//debug[1]->Release();
+	d3d::name(normal_rtv.p, "normal");
+	d3d::name(albedo_rtv.p, "albedo");
+	d3d::name(debug_rtv[0].p, "debug");
+	d3d::name(debug_rtv[1].p, "debug");
+	d3d::name(debug_rtv[2].p, "debug");
+	d3d::name(normal_srv.p, "normal");
+	d3d::name(albedo_srv.p, "albedo");
+	d3d::name(debug_srv[0].p, "debug");
+	d3d::name(debug_srv[1].p, "debug");
+	d3d::name(debug_srv[2].p, "debug");
 }
 
 void GfxDemo::init(HINSTANCE instance)
 {
 	invert_depth = true;
 	gbuffer_debug_mode = 0;
-	d3d.device = nullptr;
 	aa_visualize = false;
 	anim_frame = 0;
 	blur_sigma = 3;
-	wireframe_mode = false;
 
 	XMStoreFloat4((XMFLOAT4*)obj_ori, XMQuaternionIdentity());
 	window.init(instance);
 	d3d.init(window);
-	aa_visualize_pt[0] = 506;
-	aa_visualize_pt[1] = 111;
 	use_fresnel = true;
 	
-	cout<<"window handle = " << window.handle<<endl;
 
 	load_shaders();
 	load_models();
 	init_gbuffers(window.size().cx, window.size().cy);
 	
 	
-	cout<<"window handle = " << window.handle<<endl;
     TwBar *bar = TwNewBar("Scene");
 
 	obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
-	use_custom_aa = true;
+
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "");
-	//TwAddVarRW(bar, "Wireframe", TW_TYPE_BOOLCPP, &wireframe_mode, "");
 	TwAddVarRW(bar, "Invert Depth", TW_TYPE_BOOLCPP, &invert_depth, "");
 	TwAddVarRW(bar, "Frame", TW_TYPE_UINT32, &anim_frame, "");
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");
-	
-	TwAddVarRW(bar, "AA Viz X", TW_TYPE_FLOAT, &aa_visualize_pt[0], "");
-	TwAddVarRW(bar, "AA Viz Y", TW_TYPE_FLOAT, &aa_visualize_pt[1], "");
-	TwAddVarRW(bar, "AA Viz", TW_TYPE_BOOLCPP, &aa_visualize, "");
 	light_dir_ws[0] = 0;
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
@@ -189,12 +164,6 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
 	cam_dist = 100;
 	
-	CD3D11_BLEND_DESC  additive_blend_state_desc(D3D11_DEFAULT);
-	additive_blend_state_desc.RenderTarget[0].BlendEnable = true;
-	additive_blend_state_desc.IndependentBlendEnable = false;
-	additive_blend_state_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
-	additive_blend_state_desc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
-	additive_blend_state_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
 
 	D3D11_DEPTH_STENCIL_DESC ds_desc;
 	ZeroMemory(&ds_desc, sizeof(ds_desc));
@@ -204,8 +173,6 @@ void GfxDemo::init(HINSTANCE instance)
 	d3d.immediate_ctx->OMGetDepthStencilState(&ds_state, nullptr);
 	d3d.device->CreateDepthStencilState(&ds_desc, &inverted_ds_state);
 
-	
-	cout<<"window handle = " << window.handle<<endl;
     
 }
 #include <iostream>
@@ -230,11 +197,12 @@ void GfxDemo::frame()
 	if((window.size().cx != t2d_desc.Width) || (window.size().cy != t2d_desc.Height))
 	{
 		//recreate everything
-		resize(&normal_rtv, &normal_srv, window.size().cx, window.size().cy);		
-		resize(&albedo_rtv, &albedo_srv, window.size().cx, window.size().cy);
-		resize(&debug_rtv[0], &(debug_srv[0]), window.size().cx, window.size().cy, &debug[0]);
-		resize(&debug_rtv[1], &(debug_srv[1]), window.size().cx, window.size().cy, &debug[1]);
-		resize(&debug_rtv[2], &(debug_srv[2]), window.size().cx, window.size().cy, &debug[2]);
+		resize(&normal_rtv.p, &normal_srv.p, &normal.p, d3d.device, window.size().cx, window.size().cy);		
+		resize(&albedo_rtv.p, &albedo_srv.p, &albedo.p, d3d.device, window.size().cx, window.size().cy);
+		resize(&debug_rtv[0].p, &(debug_srv[0].p), &debug[0].p, d3d.device, window.size().cx, window.size().cy);
+		resize(&debug_rtv[1].p, &(debug_srv[1].p), &debug[1].p, d3d.device, window.size().cx, window.size().cy);
+		resize(&debug_rtv[2].p, &(debug_srv[2].p), &debug[2].p, d3d.device, window.size().cx, window.size().cy);
+		
 	}
 	gpu_env.vp_w = window.size().cx;
 	gpu_env.vp_h = window.size().cy;
@@ -268,11 +236,6 @@ void GfxDemo::frame()
 	d3d::cbuffers::ObjectAnimationCB object_animation_cb_data;
 	d3d::cbuffers::ShadeGBufferDebugCB gbuffer_debug_cb_data;
 	d3d::cbuffers::FSQuadCb fsquad_cb_data;
-
-	fsquad_cb_data.debug_vars[0] = use_custom_aa;
-	fsquad_cb_data.debug_vars[1] = (float)aa_visualize;
-	fsquad_cb_data.debug_vars[2] = aa_visualize_pt[0];
-	fsquad_cb_data.debug_vars[3] = aa_visualize_pt[1];
 
 	gbuffer_debug_cb_data.render_mode = gbuffer_debug_mode;
 	gbuffer_debug_cb_data.use_fresnel = use_fresnel ? 1 : 0;
@@ -321,8 +284,6 @@ void GfxDemo::frame()
 	XMStoreFloat4x4((XMFLOAT4X4*)&gbuffer_debug_cb_data.view, XMMatrixTranspose(v));
 
 	d3d.sync_to_cbuffer(object_animation_cb, object_animation_cb_data);
-	d3d.sync_to_cbuffer(gbuffer_debug_cb, gbuffer_debug_cb_data);
-	d3d.sync_to_cbuffer(fsquad_cb, fsquad_cb_data);
 	fx::update_gpu_env(&d3d, &fsquad_cb_data, &gpu_env);
 	
 	d3d.immediate_ctx->VSSetConstantBuffers(0, 1, &object_cb.p);
@@ -352,9 +313,9 @@ void GfxDemo::frame()
 		normal_rtv, 
 		albedo_rtv, 
 		debug_rtv[0], 
-		nullptr, //ndc_tri_verts0_rtv,
-		nullptr, //ndc_tri_verts1_rtv,
-		nullptr, //ndc_tri_verts2_rtv
+		nullptr,
+		nullptr,
+		nullptr,
 	};
 	d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, d3d.dsv);
 	
@@ -376,22 +337,18 @@ void GfxDemo::frame()
 		{
 			srvs[0] = nullptr;
 		}
-		d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler);
+		d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 		d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
 	}
 	
-	unsigned int fsquad_stride = 3 * sizeof(float);
-	//gbuffer
-	if(1)
-	{
-		fx::shade_gbuffer(&d3d, &gpu_env, &shade_gbuffer_ctx, 
-			albedo_srv, 
-			normal_srv, 
-			d3d.depth_srv, 
-			&gbuffer_debug_cb_data, 
-			debug_rtv[0]);		
-	}
+	fx::shade_gbuffer(&d3d, &gpu_env, &shade_gbuffer_ctx, 
+		albedo_srv, 
+		normal_srv, 
+		d3d.depth_srv, 
+		&gbuffer_debug_cb_data, 
+		debug_rtv[0]);		
+	
 
 	fx::lum_highpass(&d3d, &gpu_env, &fx_env.lum_highpass_ctx, 2,
 		debug_srv[0], debug_rtv[2]);		
@@ -412,7 +369,7 @@ void GfxDemo::frame()
 	{
 		ID3D11Resource* backbuffer_tex;
 		d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
-		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_PNG, L"comparison/testB.png");
+		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_PNG, L"comparison/test.png");
 		debug_render_frame++;
 		backbuffer_tex->Release();
 	}
@@ -477,29 +434,10 @@ void GfxDemo::load_models()
 }
 void GfxDemo::load_shaders()
 {
-	//d3d.create_shaders_and_il(L"shaders/standard.hlsl", vs, ps, il, gfx::VertexTypes::eStandard);
 	d3d.create_shaders_and_il(L"shaders/standard_animated.hlsl", &vs.p, &ps.p, nullptr, &il.p, 
 		gfx::VertexTypes::eAnimatedStandard);
-	d3d.create_shaders_and_il(L"shaders/shade_gbuffer.hlsl", &vs_shade_gbuffer.p, &ps_shade_gbuffer.p,
-		 nullptr, 
-		&il_fsquad.p, gfx::VertexTypes::eFSQuad);
-	d3d.create_shaders_and_il(L"shaders/ssr.hlsl", &vs_ssao.p, &ps_ssao.p);
-
-	auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_5_0");	
-	d3d.device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &vs_blur.p);
-	auto ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_x", "ps_5_0");
-	d3d.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps_blur_x.p);
-	ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_y", "ps_5_0");
-	d3d.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps_blur_y.p);
-	
-	d3d.create_shaders_and_il(L"shaders/lum_highpass.hlsl", &vs_lum_highpass.p, &ps_lum_highpass.p);
-	
-	fsquad_cb = d3d.create_cbuffer<d3d::cbuffers::FSQuadCb>();
-	blur_cb = d3d.create_cbuffer<d3d::cbuffers::BlurCB>();
 	object_cb = d3d.create_cbuffer<d3d::cbuffers::ObjectCB>();
 	object_animation_cb = d3d.create_cbuffer<d3d::cbuffers::ObjectAnimationCB>();
-	gbuffer_debug_cb = d3d.create_cbuffer<d3d::cbuffers::ShadeGBufferDebugCB>();
-	lum_highpass_cb = d3d.create_cbuffer<d3d::cbuffers::LumHighPassCb>();
 
 	fx::make_shade_gbuffer_ctx(&d3d, &shade_gbuffer_ctx);
 	fx::make_gpu_env(&d3d, &gpu_env);
