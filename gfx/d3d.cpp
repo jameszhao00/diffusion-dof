@@ -58,26 +58,27 @@ D3D11_SHADER_RESOURCE_VIEW_DESC make_depth_srv_desc()
 	return desc;
 }
 
-d3d::DrawOp D3D::create_draw_op(
-	const char* vb, 
-	int vertex_count,
-	int vb_stride,
-	unsigned int* ib, 
-	int indices_count,
-	ID3D11InputLayout* il)
+void D3D::create_draw_op(
+		const char* vb, 
+		int vertex_count,
+		int vb_stride,
+		unsigned int* ib, 
+		int indices_count,
+		ID3D11InputLayout* il,
+		d3d::DrawOp* draw_op)
 {
-	d3d::DrawOp draw_op;	
-
 	//WARNING: D3D11_BIND_SHADER_RESOURCE not usually necessary...
 	//just for testing
-	draw_op.vb = create_buffer(vb, vb_stride * vertex_count,
+	ID3D11Buffer* vb_buffer = create_buffer(vb, vb_stride * vertex_count,
 		(D3D11_BIND_FLAG)( D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE));
-	draw_op.ib = create_buffer((char*)ib, sizeof(unsigned int) * indices_count, 
-		(D3D11_BIND_FLAG)( D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE));
-	draw_op.ib_count = indices_count;
-	draw_op.vb_stride = vb_stride;
-	draw_op.il = il;
-	return draw_op;
+	draw_op->vb = vb_buffer;
+	d3d::name(draw_op->vb.p, "drawop vb");
+	draw_op->ib.Attach(create_buffer((char*)ib, sizeof(unsigned int) * indices_count, 
+		(D3D11_BIND_FLAG)( D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE)));
+	d3d::name(draw_op->ib.p, "drawop ib");
+	draw_op->ib_count = indices_count;
+	draw_op->vb_stride = vb_stride;
+	draw_op->il.Attach(il);
 }
 
 ID3D11Buffer* D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag)
@@ -104,7 +105,7 @@ void D3D::init(Window & window)
 {
 	swap_chain_desc = make_swap_chain_desc(window);
 
-	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, 
+	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_RLDO_DETAIL, 
 									NULL, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
 									&device.p, NULL, &immediate_ctx.p);
 		
@@ -112,7 +113,9 @@ void D3D::init(Window & window)
 
 	ID3D11Texture2D * back_buffer;
 	swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
+	d3d::name(back_buffer, "backbuffer");
 	device->CreateRenderTargetView(back_buffer, NULL, &back_buffer_rtv.p);
+	d3d::name(back_buffer_rtv.p, "backbuffer rtv");
 	back_buffer->Release();
 
 
@@ -120,19 +123,23 @@ void D3D::init(Window & window)
 	depth_stencil_desc = make_depth_stencil_desc(window.size());
 
 	device->CreateTexture2D(&depth_stencil_desc, NULL, &depth_texture);
+	d3d::name(depth_texture, "depth");
 
 	auto depth_dsv_desc = make_depth_dsv_desc();
 	auto depth_srv_desc = make_depth_srv_desc();
 
 	device->CreateDepthStencilView(depth_texture, &depth_dsv_desc, &dsv.p);
+	
+	d3d::name(dsv.p, "depth dsv");
 	device->CreateShaderResourceView(depth_texture, &depth_srv_desc, &depth_srv.p);
+	d3d::name(depth_srv.p, "depth srv");
 		
 
 	depth_texture->Release();
 
 	set_viewport(window.size());
 
-	TwInit(TW_DIRECT3D11, device);
+	//TWFUNC TwInit(TW_DIRECT3D11, device);
 	
 }
 
@@ -150,7 +157,7 @@ void D3D::set_viewport(SIZE size)
 }
 void D3D::swap_buffers()
 {
-	TwDraw();
+	//TWFUNC TwDraw();
 	swap_chain->Present(0, 0);	
 }
 
@@ -188,17 +195,21 @@ void D3D::window_resized(const Window * window)
 			ID3D11Texture2D * depth_buffer = nullptr;
 
 			swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
+			d3d::name(back_buffer, "backbuffer after resize");
 			device->CreateRenderTargetView(back_buffer, NULL, &back_buffer_rtv);
+			d3d::name(back_buffer_rtv.p, "backbuffer after resize rtv");
             back_buffer->Release();
 			depth_stencil_desc.Width = swap_chain_desc.BufferDesc.Width;
             depth_stencil_desc.Height = swap_chain_desc.BufferDesc.Height;
 			device->CreateTexture2D(&depth_stencil_desc, NULL, &depth_buffer);
-			
+			d3d::name(depth_buffer, "depth after resize");
 			auto depth_dsv_desc = make_depth_dsv_desc();
 			auto depth_srv_desc = make_depth_srv_desc();
 
-			device->CreateDepthStencilView(depth_buffer, &depth_dsv_desc, &dsv.p);			
+			device->CreateDepthStencilView(depth_buffer, &depth_dsv_desc, &dsv.p);	;
+			d3d::name(dsv.p, "depth after resize dsv");		
 			device->CreateShaderResourceView(depth_buffer, &depth_srv_desc, &depth_srv.p);
+			d3d::name(depth_srv.p, "depth after resize srv");		
             depth_buffer->Release();
 
 			set_viewport(window->size());
@@ -210,7 +221,7 @@ void D3D::draw(const d3d::DrawOp & draw_op)
 {
 	unsigned int offset = 0;
 	immediate_ctx->IASetInputLayout(draw_op.il);
-	immediate_ctx->IASetVertexBuffers(0, 1, &draw_op.vb, &draw_op.vb_stride, &offset);
+	immediate_ctx->IASetVertexBuffers(0, 1, &draw_op.vb.p, &draw_op.vb_stride, &offset);
 	immediate_ctx->IASetIndexBuffer(draw_op.ib, DXGI_FORMAT_R32_UINT, 0);
 	immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	immediate_ctx->DrawIndexed(draw_op.ib_count, 0, 0);
@@ -226,13 +237,20 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 	auto vs_blob = d3d::load_shader(file, "vs", "vs_5_0");	
 	auto l = vs_blob->GetBufferSize();
 	device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, vs);
+	
+	d3d::name(*vs, file);
 	auto ps_blob = d3d::load_shader(file, "ps", "ps_5_0");
 	device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, ps);
+	
+	d3d::name(*ps, file);
+	ps_blob->Release();
 	if(gs != nullptr)
 	{
 		auto gs_blob = d3d::load_shader(file, "gs", "gs_5_0");
 		device->CreateGeometryShader(gs_blob->GetBufferPointer(), gs_blob->GetBufferSize(), nullptr, gs);
+		gs_blob->Release();
 	
+		d3d::name(*gs, file);
 	}
 	if(il != nullptr)
 	{
@@ -244,7 +262,7 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 			device->CreateInputLayout(desc, 1, vs_blob->GetBufferPointer(),
-				vs_blob->GetBufferSize(), il); 
+				vs_blob->GetBufferSize(), il); 			
 		}
 		else if(type == gfx::eStandard)
 		{
@@ -274,7 +292,9 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 		{
 			assert(false);
 		}
+		d3d::name(*il, file);
 	}
+	vs_blob->Release();
 }
 namespace d3d
 {		

@@ -231,12 +231,16 @@ namespace package
 		int written_animations_count = 0;
 		ilInit();
 
-		for(auto model : *models)
+		//for(auto model : *models)
+		for(auto it = models->begin(); it != models->end(); it++)
 		{
+			auto model = *it;
 			write_mesh(out, model, written_animations_count, written_materials_count);
 			assert(out.good());
-			for(auto part : model->parts)
+			//for(auto part : model->parts)
+			for(auto parts_it = model->parts.begin(); parts_it != model->parts.end(); parts_it++)
 			{
+				auto part = *parts_it;
 				bool has_texture = part.albedo.size() > 0;
 				write_material(out, written_materials_count, 
 					(has_texture ? written_textures_count: -1));
@@ -250,8 +254,10 @@ namespace package
 				assert(out.good());
 
 			}
-			for(auto animation : model->animations)
+			//for(auto animation : model->animations)
+			for(auto it = model->animations.begin(); it != model->animations.end(); it++)
 			{
+				auto animation = *it;
 				write_animation(out, animation.get());	
 				assert(out.good());
 				written_animations_count ++;

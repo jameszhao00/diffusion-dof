@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <locale>
 #include "gfx.h"
 
 struct Window;
@@ -12,9 +13,9 @@ namespace d3d
 	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile);
 	struct DrawOp
 	{
-		ID3D11Buffer* vb;
-		ID3D11Buffer* ib;
-		ID3D11InputLayout* il;
+		CComPtr<ID3D11Buffer> vb;
+		CComPtr<ID3D11Buffer> ib;
+		CComPtr<ID3D11InputLayout> il;
 		unsigned int vb_stride;
 		unsigned int ib_count;
 	};
@@ -68,6 +69,16 @@ namespace d3d
 		device_child->SetPrivateData( WKPDID_D3DDebugObjectName, name.length(), name.c_str());
 	}
 	template<typename T>
+	void name(T* device_child, wstring ws)
+	{
+		//conversion code form http://stackoverflow.com/questions/4804298/c-how-to-convert-wstring-into-string
+		std::string buffer(ws.size() * 4 + 1, 0);
+		std::use_facet<std::ctype<wchar_t> >(std::locale("")).narrow(&ws[0], &ws[0] + ws.size(), '?', &buffer[0]);
+		string name_param = std::string(&buffer[0]);
+		name(device_child, name_param);
+		//device_child->SetPrivateData( WKPDID_D3DDebugObjectName, small_name.length(), small_name.c_str());
+	}
+	template<typename T>
 	string name(T* device_child)
 	{
 		unsigned int data_size = 64;
@@ -92,13 +103,14 @@ struct D3D
 
 	void draw(const d3d::DrawOp & draw_op);
 
-	d3d::DrawOp create_draw_op(
+	void create_draw_op(
 		const char* vb, 
 		int vertex_count,
 		int vb_stride,
 		unsigned int* ib, 
 		int indices_count,
-		ID3D11InputLayout* il);
+		ID3D11InputLayout* il,
+		d3d::DrawOp* drawop);
 
 	//duplicate of the above... not using ccomptr
 	void D3D::create_shaders_and_il(const wchar_t * file, 

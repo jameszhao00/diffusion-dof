@@ -1,7 +1,5 @@
 #include "stdafx.h"
 #include "gfxdemo.h"
-
-//int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int cmdShow)
 int main()
 {
 	GfxDemo demo;
@@ -20,5 +18,7 @@ int main()
 			demo.frame();
 		}
     }
-	TwTerminate();
+	demo.d3d.immediate_ctx->ClearState();
+	demo.d3d.immediate_ctx->Flush();
+	//TWFUNC TwTerminate();
 }

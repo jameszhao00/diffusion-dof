@@ -14,7 +14,8 @@
 #include <D3D11.h>
 #include <D3DX11.h>
 #include <D3DCompiler.h>
-#include <DirectXMath.h>
+//#include <DirectXMath.h>
+#include <xnamath.h>
 
 #include <stdio.h>
 #include <tchar.h>

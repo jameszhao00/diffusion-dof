@@ -9,11 +9,12 @@
 #include <assimp\aiScene.h>
 #include <assimp\aiPostProcess.h>
 
-#include <DirectXMath.h>
+//#include <DirectXMath.h>
+#include <xnamath.h>
 
 #include <fbxsdk.h>
 
-using namespace DirectX;
+//using namespace DirectX;
 using namespace std;
 using namespace gfx;
 namespace asset
@@ -711,8 +712,10 @@ namespace asset
 					shared_ptr<AssetModel> model(new AssetModel());
 					models.push_back(model);
 					model->materials.push_back(materials[material_i]);
-					for(auto tri : triangles)
+					//for(auto tri : triangles)
+					for(auto it = triangles.begin(); it != triangles.end(); it++)
 					{
+						auto tri = *it;
 						if(tri.material_index == material_i)
 						{
 							AssetTriangle new_tri;
@@ -931,8 +934,10 @@ namespace asset
 				part.albedo = asset_model.materials[material_i];
 				part.indices_offset = splitted_index_buffer.size();
 				part.indices_count = 0;
-				for(auto tri : asset_model.triangles)
+				//for(auto tri : asset_model.triangles)
+				for(auto it = asset_model.triangles.begin(); it != asset_model.triangles.end(); it++)
 				{
+					auto tri = *it;
 					if(tri.material_index == material_i)
 					{
 						splitted_index_buffer.push_back(tri.vertex_indices[0]);

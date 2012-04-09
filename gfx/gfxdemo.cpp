@@ -6,7 +6,7 @@
 
 using namespace std;
 
-using namespace DirectX;
+//using namespace DirectX;
 
 #define in
 #define inout
@@ -128,6 +128,8 @@ void GfxDemo::init_gbuffers(int w, int h)
 
 void GfxDemo::init(HINSTANCE instance)
 {
+	//weird... why do we need to initalize?
+	//if we don't init drawop's ccomptrs are initialized to garbage
 	invert_depth = true;
 	gbuffer_debug_mode = 0;
 	aa_visualize = false;
@@ -148,7 +150,10 @@ void GfxDemo::init(HINSTANCE instance)
     TwBar *bar = TwNewBar("Scene");
 
 	obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
-
+	light_dir_ws[0] = 0;
+	light_dir_ws[1] = 1;
+	light_dir_ws[2] = 0;
+	/*
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "");
 	TwAddVarRW(bar, "Invert Depth", TW_TYPE_BOOLCPP, &invert_depth, "");
@@ -157,11 +162,10 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");
-	light_dir_ws[0] = 0;
-	light_dir_ws[1] = 1;
-	light_dir_ws[2] = 0;
+	
 	TwAddVarRW(bar, "Use Fresnel", TW_TYPE_BOOLCPP, &use_fresnel, "");
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
+	*/
 	cam_dist = 100;
 	
 
@@ -292,7 +296,7 @@ void GfxDemo::frame()
 	
 	unsigned int offset = 0;
 	d3d.immediate_ctx->IASetInputLayout(drawop.il);
-	d3d.immediate_ctx->IASetVertexBuffers(0, 1, &drawop.vb, &drawop.vb_stride, &offset);
+	d3d.immediate_ctx->IASetVertexBuffers(0, 1, &drawop.vb.p, &drawop.vb_stride, &offset);
 	d3d.immediate_ctx->IASetIndexBuffer(drawop.ib, DXGI_FORMAT_R32_UINT, 0);
 	d3d.immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -406,14 +410,13 @@ void GfxDemo::load_models()
 	cam_focus[2] = 0;//model->center[2];
 	package::load_package(L"assets/ssr.package", &package);
 
-	
-	drawop = d3d.create_draw_op(
+	d3d.create_draw_op(
 		package.meshes[0].verticies, 
 		package.meshes[0].vertex_count, 
 		package.meshes[0].vertex_stride, 
 		(unsigned int*)package.meshes[0].indices, 
 		package.meshes[0].indices_count, 
-		il);
+		il, &drawop);
 
 	for(int i = 0; i < package.textures.size(); i++)
 	{
