@@ -11,5 +11,5 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 {			
 	float4 a = g_source_a.Load(int3(position.xy, 0), 0);
 	float4 b = g_source_b.Load(int3(position.xy, 0), 0);
-	return a + b;
+	return float4(a.xyz + b.xyz, 1);
 }

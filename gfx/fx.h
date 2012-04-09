@@ -67,6 +67,8 @@ namespace fx
 		unsigned int fsquad_stride;
 		unsigned int zero;
 		Uniforms* fsquad_uniforms;
+
+		int vp_w, vp_h;
 	};
 
 	void make_fx_env(Gfx* gfx, out FXEnvironment* env);
@@ -118,10 +120,11 @@ namespace fx
 		in Resource* input,
 		out Target* output);
 	void lum_highpass(Gfx* gfx, 
-		const GpuEnvironment* env,
+		const GpuEnvironment* gpu_env,
 		const LumHighpassContext* fx_ctx,
+		float min_lum,
 		in Resource* input,
-		out Resource* output);
+		out Target* output);
 	void update_gpu_env(Gfx* gfx,		
 		const d3d::cbuffers::FSQuadCb* fsquad_cb_data,
 		GpuEnvironment* gpu_env);

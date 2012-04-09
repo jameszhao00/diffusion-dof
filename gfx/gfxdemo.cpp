@@ -210,64 +210,7 @@ void GfxDemo::init(HINSTANCE instance)
 }
 #include <iostream>
 float dt = 0;
-double gaussian(double sigma, double x)
-{
-	return exp(-(x*x) / (2 * sigma * sigma));
-}
-void build_gaussian_params(float sigma, 
-						   int texture_size,
-						   float* offsets,
-						   float* norms,
-						   int* offset_count)
-{
-	assert(offsets != nullptr);
-	assert(texture_size > 0);
-	assert(norms != nullptr);
-	assert(offset_count != nullptr);
-	assert(sigma >= 1);
-	const float CUTOFF_MULTIPLIER = 3.0;
-	const int MAX_TEXTURE_SAMPLES = 16;
-	double sample_uv_size = (1.0f / (double)texture_size);
-	//cutoff INCLUSIVE!
-	//if cutoff says 9 it's saying there's 10 weights
-	int cutoff = ceil(sigma * CUTOFF_MULTIPLIER);
-	int texture_samples = 1 + ceil(cutoff / 2.0);
-	int weights_count = (texture_samples - 1) * 2 + 1;
-	assert(texture_samples < MAX_TEXTURE_SAMPLES);
-	*offset_count = texture_samples;
-	//DEAL WITH VP SIZE!
-	double* weights = new double[weights_count];
-	
-	
-	double total_weight = 0;
-	for(int i = 0; i < weights_count; i++)
-	{
-		double weight = gaussian(sigma, i);
-		weights[i] = weight;
-		total_weight += (i > 0) ? 2 * weight : weight; //don't double count weight[0]
-	}
-	//do sample 0
-	//offsets[0] = 0; //the original pixel's offset is implicit...
-	norms[0] = weights[0] / total_weight;
-	offsets[0] = 0; //writing this b/c of packing rules
-	//start at sample 1..
-	assert(texture_samples > 1);
-	int base_offset = 1;
-	for(int i = 1; i < texture_samples; i++)
-	{
-		double w_a = weights[base_offset + 2 * (i - 1)];
-		double w_b = weights[base_offset + 2 * (i - 1) + 1];
-		double pix_offset = 1 + 2*(i-1) + w_b/(w_a+w_b);
-		offsets[i] = (float)(sample_uv_size * pix_offset);
-		norms[i] = (float)((w_a + w_b) / total_weight);
-	}
-#ifdef DEBUG
-	float norm_sum = norms[0];
-	for(int i = 1; i < texture_samples; i++) norm_sum += 2 * norms[i];
-	assert(abs(norm_sum - 1) < 0.00001);
-#endif
-
-}
+float debug_render_frame = 0;
 template<typename T>
 void clear_views(inout T** views, int num_views)
 {
@@ -276,7 +219,7 @@ void clear_views(inout T** views, int num_views)
 
 void GfxDemo::frame()
 {		
-
+	
 
 	if(d3d.device == nullptr) return;
 	D3D11_TEXTURE2D_DESC t2d_desc;
@@ -293,7 +236,8 @@ void GfxDemo::frame()
 		resize(&debug_rtv[1], &(debug_srv[1]), window.size().cx, window.size().cy, &debug[1]);
 		resize(&debug_rtv[2], &(debug_srv[2]), window.size().cx, window.size().cy, &debug[2]);
 	}
-
+	gpu_env.vp_w = window.size().cx;
+	gpu_env.vp_h = window.size().cy;
 	dt += 0.001f;
 	float color[4] = {0, 0, 0.0f, 0};
 	float neg_one[4] = {-1, -1, -1, -1};
@@ -432,6 +376,7 @@ void GfxDemo::frame()
 		{
 			srvs[0] = nullptr;
 		}
+		d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler);
 		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 		d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
 	}
@@ -447,109 +392,30 @@ void GfxDemo::frame()
 			&gbuffer_debug_cb_data, 
 			debug_rtv[0]);		
 	}
-	if(1)
-	{
-		//highpass
-		clear_views(rtvs, rtvs_count);
-		clear_views(srvs, srvs_count);
-		d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 
+	fx::lum_highpass(&d3d, &gpu_env, &fx_env.lum_highpass_ctx, 2,
+		debug_srv[0], debug_rtv[2]);		
+	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx,
+		fx::eHorizontal, blur_sigma, debug_srv[2], debug_rtv[1]);
+	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx,
+		fx::eVertical, blur_sigma, debug_srv[1], debug_rtv[2]);
+	fx::resolve(&d3d, &gpu_env, &fx_env.resolve_ctx, debug_srv[0], debug_rtv[1]);
 
-		rtvs[0] = debug_rtv[2];
-		rtvs[1] = nullptr; 
-		rtvs[2] = nullptr;
-
-		srvs[0] = debug_srv[0];
-		srvs[1] = nullptr;
-		srvs[2] = nullptr;
+	fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
+		debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
 				
-		d3d::cbuffers::LumHighPassCb lum_highpass_cb_data;
-		//lum_highpass_cb_data.min_lum[0] = 0;
-		lum_highpass_cb_data.min_lum[0] = 2;
-		d3d.sync_to_cbuffer(lum_highpass_cb, lum_highpass_cb_data);
-
-		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-		d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-		
-		d3d.immediate_ctx->PSSetConstantBuffers(0, 1, &lum_highpass_cb.p);
-		d3d.immediate_ctx->IASetInputLayout(il_fsquad);
-		d3d.immediate_ctx->IASetVertexBuffers(0, 1, &fsquad_vb.p, &fsquad_stride, &offset);
-		d3d.immediate_ctx->VSSetShader(vs_lum_highpass, nullptr, 0);		
-		d3d.immediate_ctx->PSSetShader(ps_lum_highpass, nullptr, 0);
-		d3d.immediate_ctx->Draw(6, 0);
-		if(1)
-		{
-			//blur
-		
-			clear_views(rtvs, rtvs_count);
-			clear_views(srvs, srvs_count);
-			d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-			d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-
-			rtvs[0] = debug_rtv[1];
-			rtvs[1] = nullptr; 
-			rtvs[2] = nullptr;
-
-			srvs[0] = debug_srv[2];
-			srvs[1] = nullptr;
-			srvs[2] = nullptr;
-		
-			d3d::cbuffers::BlurCB blur_cb_data;
-			build_gaussian_params(blur_sigma,
-				window.size().cx, 
-				blur_cb_data.offsets, 
-				blur_cb_data.norms, 
-				&blur_cb_data.offsets_count[0]);
-			d3d.sync_to_cbuffer(blur_cb, blur_cb_data);
-
-			d3d.immediate_ctx->PSSetConstantBuffers(0, 1, &blur_cb.p);
-
-		
-			d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-			d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-
-			d3d.immediate_ctx->IASetInputLayout(il_fsquad);
-			d3d.immediate_ctx->IASetVertexBuffers(0, 1, &fsquad_vb.p, &fsquad_stride, &offset);
-			d3d.immediate_ctx->VSSetShader(vs_blur, nullptr, 0);		
-			d3d.immediate_ctx->PSSetShader(ps_blur_x, nullptr, 0);
-			d3d.immediate_ctx->Draw(6, 0);
-			//vertical
-		
-			clear_views(rtvs, rtvs_count);
-			clear_views(srvs, srvs_count);
-			d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-			d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-
-			build_gaussian_params(blur_sigma,
-				window.size().cy, 
-				blur_cb_data.offsets, 
-				blur_cb_data.norms, 
-				&blur_cb_data.offsets_count[0]);
-			d3d.sync_to_cbuffer(blur_cb, blur_cb_data);
-			rtvs[0] = debug_rtv[2];
-			rtvs[1] = nullptr; 
-			rtvs[2] = nullptr;
-
-			srvs[0] = debug_srv[1];
-			srvs[1] = nullptr;
-			srvs[2] = nullptr;
-			d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-			d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, nullptr);	
-		
-			d3d.immediate_ctx->PSSetShader(ps_blur_y, nullptr, 0);
-
-			d3d.immediate_ctx->Draw(6, 0);
-
-			fx::resolve(&d3d, &gpu_env, &fx_env.resolve_ctx, debug_srv[0], debug_rtv[1]);
-
-			fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
-				debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
-		}
-	}
+	
 	ZeroMemory(rtvs, sizeof(rtvs));
 	ZeroMemory(srvs, sizeof(srvs));
-
+	//for debugging purposes
+	if(debug_render_frame == 0)
+	{
+		ID3D11Resource* backbuffer_tex;
+		d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
+		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_PNG, L"comparison/testB.png");
+		debug_render_frame++;
+		backbuffer_tex->Release();
+	}
 
 	d3d.swap_buffers();	
 }

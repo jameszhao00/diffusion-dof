@@ -1,6 +1,64 @@
 #include "stdafx.h"
 #include "fx.h"
 
+double gaussian(double sigma, double x)
+{
+	return exp(-(x*x) / (2 * sigma * sigma));
+}
+void build_gaussian_params(float sigma, 
+						   int texture_size,
+						   float* offsets,
+						   float* norms,
+						   int* offset_count)
+{
+	assert(offsets != nullptr);
+	assert(texture_size > 0);
+	assert(norms != nullptr);
+	assert(offset_count != nullptr);
+	assert(sigma >= 1);
+	const float CUTOFF_MULTIPLIER = 3.0;
+	const int MAX_TEXTURE_SAMPLES = 16;
+	double sample_uv_size = (1.0f / (double)texture_size);
+	//cutoff INCLUSIVE!
+	//if cutoff says 9 it's saying there's 10 weights
+	int cutoff = ceil(sigma * CUTOFF_MULTIPLIER);
+	int texture_samples = 1 + ceil(cutoff / 2.0);
+	int weights_count = (texture_samples - 1) * 2 + 1;
+	assert(texture_samples < MAX_TEXTURE_SAMPLES);
+	*offset_count = texture_samples;
+	//DEAL WITH VP SIZE!
+	double* weights = new double[weights_count];
+	
+	
+	double total_weight = 0;
+	for(int i = 0; i < weights_count; i++)
+	{
+		double weight = gaussian(sigma, i);
+		weights[i] = weight;
+		total_weight += (i > 0) ? 2 * weight : weight; //don't double count weight[0]
+	}
+	//do sample 0
+	//offsets[0] = 0; //the original pixel's offset is implicit...
+	norms[0] = weights[0] / total_weight;
+	offsets[0] = 0; //writing this b/c of packing rules
+	//start at sample 1..
+	assert(texture_samples > 1);
+	int base_offset = 1;
+	for(int i = 1; i < texture_samples; i++)
+	{
+		double w_a = weights[base_offset + 2 * (i - 1)];
+		double w_b = weights[base_offset + 2 * (i - 1) + 1];
+		double pix_offset = 1 + 2*(i-1) + w_b/(w_a+w_b);
+		offsets[i] = (float)(sample_uv_size * pix_offset);
+		norms[i] = (float)((w_a + w_b) / total_weight);
+	}
+#ifdef DEBUG
+	float norm_sum = norms[0];
+	for(int i = 1; i < texture_samples; i++) norm_sum += 2 * norms[i];
+	assert(abs(norm_sum - 1) < 0.00001);
+#endif
+
+}
 namespace fx
 {
 	const int TARGETS_COUNT = 6;
@@ -170,12 +228,46 @@ namespace fx
 		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::BlurCB>();
 	}
 	void blur(Gfx* gfx, 
-		const GpuEnvironment* env,
+		const GpuEnvironment* gpu_env,
 		const BlurContext* fx_ctx,
 		BlurDirection direction,
 		float sigma,
 		in Resource* input,
-		out Target* output);
+		out Target* output)
+	{
+		Target* targets[TARGETS_COUNT] = {};
+		Resource* resources[RESOURCES_COUNT] = {};
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);	
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+		targets[0] = output;
+		resources[0] = input;
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);	
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+				
+		d3d::cbuffers::BlurCB blur_cb_data;
+
+		build_gaussian_params(sigma,
+			direction == eHorizontal ? gpu_env->vp_w : gpu_env->vp_h, 
+			blur_cb_data.offsets, 
+			blur_cb_data.norms, 
+			&blur_cb_data.offsets_count[0]);
+
+		gfx->sync_to_cbuffer(fx_ctx->uniforms, blur_cb_data);
+		gfx->immediate_ctx->PSSetSamplers(0, 1, &gpu_env->linear_sampler);
+		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms);
+
+		
+
+		
+		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+			&gpu_env->zero);
+
+		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(direction == eHorizontal ? fx_ctx->ps_h : fx_ctx->ps_v, nullptr, 0);
+	
+		gfx->immediate_ctx->Draw(6, 0);
+	}
 
 	void make_lum_highpass_ctx(Gfx* gfx, out LumHighpassContext* ctx)
 	{		
@@ -184,10 +276,31 @@ namespace fx
 		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::LumHighPassCb>();
 	}
 	void lum_highpass(Gfx* gfx, 
-		const GpuEnvironment* env,
+		const GpuEnvironment* gpu_env,
 		const LumHighpassContext* fx_ctx,
+		float min_lum,
 		in Resource* input,
-		out Resource* output);
+		out Target* output)
+	{
+		Target* targets[TARGETS_COUNT] = {output};
+		Resource* resources[RESOURCES_COUNT] = {input};
+		
+		d3d::cbuffers::LumHighPassCb lum_highpass_cb_data;
+		lum_highpass_cb_data.min_lum[0] = min_lum;
+		gfx->sync_to_cbuffer(fx_ctx->uniforms, lum_highpass_cb_data);
+
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+		gfx->immediate_ctx->PSSetConstantBuffers(0, 1, &fx_ctx->uniforms);
+		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb, &gpu_env->fsquad_stride, 
+			&gpu_env->zero);
+
+		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
+	
+		gfx->immediate_ctx->Draw(6, 0);
+	}
 	
 	void update_gpu_env(Gfx* gfx,		
 		const d3d::cbuffers::FSQuadCb* fsquad_cb_data,
@@ -223,9 +336,7 @@ namespace fx
 		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
 	
 		float default_blend_factors[4]; 
-		//gfx->immediate_ctx->OMSetBlendState(gpu_env->additive_blend, default_blend_factors, 1);
 		gfx->immediate_ctx->Draw(6, 0);
-		//gfx->immediate_ctx->OMSetBlendState(gpu_env->standard_blend, default_blend_factors, 1);
 	}
 	
 	void make_resolve_ctx(Gfx* gfx, out FXContext* ctx)
