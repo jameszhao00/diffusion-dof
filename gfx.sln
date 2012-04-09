@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 11
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gfx", "gfx\gfx.vcxproj", "{A50CE619-42E9-C866-D7B0-18E6A94F2827}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F984A3BC-2BC7-4303-A9E3-4EBE93DDDD59}"
+	ProjectSection(SolutionItems) = preProject
+		gfx\basic.hlsl = gfx\basic.hlsl
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A50CE619-42E9-C866-D7B0-18E6A94F2827}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A50CE619-42E9-C866-D7B0-18E6A94F2827}.Debug|Win32.Build.0 = Debug|Win32
+		{A50CE619-42E9-C866-D7B0-18E6A94F2827}.Release|Win32.ActiveCfg = Release|Win32
+		{A50CE619-42E9-C866-D7B0-18E6A94F2827}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
