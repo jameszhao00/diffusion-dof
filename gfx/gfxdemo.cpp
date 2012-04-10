@@ -88,8 +88,14 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d.device->CreateTexture2D(&desc, nullptr, &debug[0]);
 	desc.SampleDesc.Count = 1;
 	d3d.device->CreateTexture2D(&desc, nullptr, &debug[1]);
+
+	desc.MipLevels = 0;
+	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 	d3d.device->CreateTexture2D(&desc, nullptr, &debug[2]);
 	//DEBUG[1, 2] is NOT MSAA
+	//debug 0 is msaa 
+	//debug 1 is no msaa
+	//debug 2 is no msaa and supports mip maps
 	
 
 	d3d::name(normal.p, "normal");
@@ -103,11 +109,19 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d.device->CreateRenderTargetView(debug[0], nullptr, &debug_rtv[0]);
 	d3d.device->CreateRenderTargetView(debug[1], nullptr, &debug_rtv[1]);
 	d3d.device->CreateRenderTargetView(debug[2], nullptr, &debug_rtv[2]);
+
 	d3d.device->CreateShaderResourceView(normal, nullptr, &normal_srv);
 	d3d.device->CreateShaderResourceView(albedo, nullptr, &albedo_srv);
 	d3d.device->CreateShaderResourceView(debug[0], nullptr, &debug_srv[0]);
 	d3d.device->CreateShaderResourceView(debug[1], nullptr, &debug_srv[1]);
-	d3d.device->CreateShaderResourceView(debug[2], nullptr, &debug_srv[2]);
+	//debug 2 needs mip support
+	CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+	srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srv_desc.Texture2D.MostDetailedMip = 0;
+	srv_desc.Texture2D.MipLevels = -1;
+	srv_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	
+	d3d.device->CreateShaderResourceView(debug[2], &srv_desc, &debug_srv[2]);
 	
 	d3d::name(normal_rtv.p, "normal");
 	d3d::name(albedo_rtv.p, "albedo");
@@ -148,10 +162,10 @@ void GfxDemo::init(HINSTANCE instance)
 	light_dir_ws[0] = 0;
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
-	
+	do_anim = false;
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "");
-	TwAddVarRW(bar, "Invert Depth", TW_TYPE_BOOLCPP, &invert_depth, "");
+	TwAddVarRW(bar, "Anim", TW_TYPE_BOOLCPP, &do_anim, "");
 	TwAddVarRW(bar, "Frame", TW_TYPE_UINT32, &anim_frame, "");
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
@@ -176,18 +190,17 @@ void GfxDemo::init(HINSTANCE instance)
 }
 #include <iostream>
 float dt = 0;
-float debug_render_frame = 0;
+int debug_render_frame = 0;
 template<typename T>
 void clear_views(inout T** views, int num_views)
 {
 	for(int i = 0; i < num_views; i++) views[i] = nullptr;
 }
-
 void GfxDemo::frame()
 {		
-	
 
 	if(d3d.device == nullptr) return;
+
 	D3D11_TEXTURE2D_DESC t2d_desc;
 	ID3D11Texture2D* normal_resource = nullptr;
 	normal_srv->GetResource((ID3D11Resource**)&normal_resource);
@@ -307,6 +320,7 @@ void GfxDemo::frame()
 		nullptr,
 		nullptr
 	};
+	
 	d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 	ID3D11RenderTargetView* rtvs[rtvs_count] = {
 		normal_rtv, 
@@ -348,44 +362,47 @@ void GfxDemo::frame()
 		&gbuffer_debug_cb_data, 
 		debug_rtv[0]);		
 	
-
+	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
+	//d[2] is now lum
+	d3d.immediate_ctx->GenerateMips(debug_srv[2]);
+	//d[2] mips now have avg lum	
 	fx::lum_highpass(&d3d, &gpu_env, &fx_env.lum_highpass_ctx, 2,
-		debug_srv[0], debug_rtv[2]);		
+		debug_srv[0], debug_rtv[1]);		
+	//d[1] now has colors above lum
 	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx,
-		fx::eHorizontal, blur_sigma, debug_srv[2], debug_rtv[1]);
+		fx::eHorizontal, blur_sigma, debug_srv[1], debug_rtv[2]);
+	//d[2] now has h blurred bloom
 	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx,
-		fx::eVertical, blur_sigma, debug_srv[1], debug_rtv[2]);
-	fx::resolve(&d3d, &gpu_env, &fx_env.resolve_ctx, debug_srv[0], debug_rtv[1]);
-
+		fx::eVertical, blur_sigma, debug_srv[2], debug_rtv[1]);
+	//d[1] now has v blurred bloom
+	//d3d.immediate_ctx->ResolveSubresource(debug[2], 0, debug[0], 0, 
+	//	DXGI_FORMAT_R16G16B16A16_FLOAT);
+	//d[2] now has color
+	float dummy[4];
+	//d3d.immediate_ctx->OMSetBlendState(gpu_env.additive_blend, dummy, 1);
+	fx::tonemap(&d3d, &gpu_env, &tonemap_ctx, debug_srv[0], debug_rtv[2]);
+	//d3d.immediate_ctx->OMSetBlendState(gpu_env.standard_blend, dummy, 1);
+	//resort to extra add b/c blend just doesn't seem to work
 	fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
 		debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
-				
 	
-	ZeroMemory(rtvs, sizeof(rtvs));
-	ZeroMemory(srvs, sizeof(srvs));
+	if((debug_render_frame % 3 == 0) && do_anim) anim_frame++;
+	
 	//for debugging purposes
 	if(debug_render_frame == 0)
 	{
 		ID3D11Resource* backbuffer_tex;
 		d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
 		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_PNG, L"comparison/test.png");
-		debug_render_frame++;
+		
 		backbuffer_tex->Release();
 	}
-
+	debug_render_frame++;
 	d3d.swap_buffers();	
 }
 
 void GfxDemo::load_models()
 {
-	float fsquad_data[] = {
-		-1, 1, 0,
-		1, 1, 0,
-		1, -1, 0,
-		-1, 1, 0,
-		1, -1, 0,
-		-1, -1, 0
-	};
 	if(0)
 	{		
 		model = asset::fbx::load_animated_fbx_model("assets/source/dude.fbx");
@@ -437,4 +454,5 @@ void GfxDemo::load_shaders()
 	fx::make_shade_gbuffer_ctx(&d3d, &shade_gbuffer_ctx);
 	fx::make_gpu_env(&d3d, &gpu_env);
 	fx::make_fx_env(&d3d, &fx_env);
+	fx::make_tonemap_ctx(&d3d, &tonemap_ctx);
 }

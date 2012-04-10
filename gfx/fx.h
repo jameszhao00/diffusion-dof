@@ -50,6 +50,7 @@ namespace fx
 		FXContext resolve_ctx;
 		FXContext lum_highpass_ctx;
 		FXContext additive_blend_ctx;
+		FXContext luminance_ctx;
 	};
 	//d3d states, etc
 	struct GpuEnvironment
@@ -70,7 +71,8 @@ namespace fx
 	void make_fx_env(Gfx* gfx, out FXEnvironment* env);
 	void make_gpu_env(Gfx* gfx, out GpuEnvironment* env);
 
-	
+	void make_tonemap_ctx(Gfx* gfx, out FXContext* ctx);
+	void make_luminance_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_resolve_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_additive_blend_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_gen_gbuffer_ctx(Gfx* gfx, out GenGBufferContext* ctx);
@@ -119,6 +121,16 @@ namespace fx
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
 		float min_lum,
+		in Resource* input,
+		out Target* output);
+	void luminance(Gfx* gfx, 
+		const GpuEnvironment* gpu_env,
+		const FXContext* fx_ctx,
+		in Resource* input,
+		out Target* output);
+	void tonemap(Gfx* gfx, 
+		const GpuEnvironment* gpu_env,
+		const FXContext* fx_ctx,
 		in Resource* input,
 		out Target* output);
 	void update_gpu_env(Gfx* gfx,		

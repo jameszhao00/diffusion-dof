@@ -75,10 +75,10 @@ PS2GPU ps( VS2PS IN )
 		
 		if(depth != DEPTH_MAX)
 		{	
-			float spec_power = 600;
-			float spec_normalization = (spec_power + 2) / (2 * 3.1415);
+			float glossiness = 30;
+			float spec_normalization = (glossiness + 2) / (2 * 3.1415);
 			float brdf_normalization = 3.1415 / 4;
-			float spec = pow(max(dot(normal, vs_h), 0), spec_power);
+			float spec = pow(max(dot(normal, vs_h), 0), glossiness);
 			float d = spec_normalization * spec;
 			float3 f0 = float3(0.2, 0.2, 0.2); //schlick f0
 			float3 f = f0 + (1 - f0)*pow(1 - dot(vs_light_dir, vs_h), 5);

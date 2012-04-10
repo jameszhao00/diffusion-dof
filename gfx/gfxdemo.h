@@ -63,7 +63,7 @@ struct GfxDemo
 	float light_dir_ws[3];
 	bool aa_visualize;
 	float dx;
-
+	bool do_anim;
 	unsigned int anim_frame;
 
 	Window window;
@@ -76,4 +76,5 @@ struct GfxDemo
 	fx::GpuEnvironment gpu_env;
 	fx::FXEnvironment fx_env;
 	fx::FXContext shade_gbuffer_ctx;
+	fx::FXContext tonemap_ctx;
 };

@@ -50,3 +50,8 @@ float2 vs_to_vp(float3 vs_pos, float2 vp_size, float4x4 proj)
 	float3 ndc = r.xyz / r.w;
 	return ndc_to_vp(vp_size, ndc.xyz);
 }
+
+float luminance(float3 source)
+{
+	return 0.2126 * source.r + 0.7152 * source.g + 0.0722 * source.b;
+}

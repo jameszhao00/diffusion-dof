@@ -79,6 +79,7 @@ namespace fx
 		make_blur_ctx(gfx, &env->blur_ctx);
 		make_lum_highpass_ctx(gfx, &env->lum_highpass_ctx);
 		make_additive_blend_ctx(gfx, &env->additive_blend_ctx);
+		make_luminance_ctx(gfx, &env->luminance_ctx);
 	}
 	void make_gpu_env(Gfx* gfx, out GpuEnvironment* env)
 	{
@@ -92,6 +93,8 @@ namespace fx
 		additive_blend_state_desc.IndependentBlendEnable = false;
 		additive_blend_state_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
 		additive_blend_state_desc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+		additive_blend_state_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+		additive_blend_state_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 		additive_blend_state_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
 
 		gfx->immediate_ctx->OMGetBlendState(&env->standard_blend, 
@@ -117,9 +120,6 @@ namespace fx
 				gfx::VertexTypes::eFSQuad);
 			env->fsquad_stride = 3 * sizeof(float);
 			env->zero = 0;
-			
-				d3d::name(vs, "fsquad dummy");
-				d3d::name(ps, "fsquad dummy");
 			vs->Release(); 
 			ps->Release();
 			//fs quad vb
@@ -373,4 +373,57 @@ namespace fx
 	
 		gfx->immediate_ctx->Draw(6, 0);
 	}
+
+	void luminance( Gfx* gfx, 
+		const GpuEnvironment* gpu_env, 
+		const FXContext* fx_ctx, 
+		in Resource* input, 
+		out Target* output )
+	{
+		Target* targets[TARGETS_COUNT] = {output};
+		Resource* resources[RESOURCES_COUNT] = {input};
+
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
+			&gpu_env->zero);
+
+		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
+
+		gfx->immediate_ctx->Draw(6, 0);
+	}
+
+	void make_luminance_ctx( Gfx* gfx, out FXContext* ctx )
+	{
+		gfx->create_shaders_and_il(L"shaders/luminance.hlsl", 
+			&ctx->vs, &ctx->ps);
+	}
+
+	void make_tonemap_ctx( Gfx* gfx, out FXContext* ctx )
+	{
+		gfx->create_shaders_and_il(L"shaders/tonemap.hlsl", 
+			&ctx->vs, &ctx->ps);
+	}
+
+	void tonemap( Gfx* gfx, const GpuEnvironment* gpu_env, const FXContext* fx_ctx, in Resource* input, out Target* output )
+	{
+		Target* targets[TARGETS_COUNT] = {output};
+		Resource* resources[RESOURCES_COUNT] = {input};
+
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
+			&gpu_env->zero);
+
+		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
+
+		gfx->immediate_ctx->Draw(6, 0);
+	}
+
 };

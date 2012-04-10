@@ -26,7 +26,6 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 		float y = 0.2126 * source.r + 0.7152 * source.g + 0.0722 * source.b;
 		if(y>g_min_lum.x)
 		{
-			return float4(source, 1);
 			passed++;
 			total += source;
 		}
