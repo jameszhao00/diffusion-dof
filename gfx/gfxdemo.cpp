@@ -158,7 +158,9 @@ void GfxDemo::init(HINSTANCE instance)
 	
     TwBar *bar = TwNewBar("Scene");
 
-	obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
+	//obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
+	//obj_ori[0] = 0; obj_ori[1] = 0; obj_ori[2] = 0; obj_ori[3] = 0;
+	XMStoreFloat4((XMFLOAT4*)obj_ori, XMQuaternionIdentity());
 	light_dir_ws[0] = 0;
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
@@ -268,9 +270,9 @@ void GfxDemo::frame()
 
 	auto w = XMMatrixRotationQuaternion(XMLoadFloat4((XMFLOAT4*)obj_ori));
 	cam_focus[0] = dx;
-	auto v = XMMatrixLookAtLH(XMVectorSet(cam_focus[0], cam_focus[1], cam_focus[2] - cam_dist, 1), 
-		
-	XMLoadFloat4((XMFLOAT4*)cam_focus), XMVectorSet(0, 1, 0, 0));
+
+	//auto v = XMMatrixLookAtLH(XMVectorSet(cam_focus[0], cam_focus[1], cam_focus[2] - cam_dist, 1), XMLoadFloat4((XMFLOAT4*)cam_focus), XMVectorSet(0, 1, 0, 0));
+	auto v = XMMatrixLookAtLH(XMVectorSet(0, 50, -90, 1), XMVectorSet(0, 0, 0, 1), XMVectorSet(0, 1, 0, 0));
 
 
 	
@@ -286,6 +288,7 @@ void GfxDemo::frame()
 	fsquad_cb_data.proj_constants[0] = f / (f - n);
 	fsquad_cb_data.proj_constants[1] = (-f * n) / (f - n);
 	auto p = XMMatrixPerspectiveFovLH(XM_PI / 4.0f, window_size.cx / (float)window_size.cy, n, f);//1, 1000);
+	//auto p = XMMatrixPerspectiveLH(100, 100, n, f);//1, 1000);
 	
 	auto wv = XMMatrixMultiply(w, v);
 	auto wvp = XMMatrixMultiply(wv, p);
@@ -362,7 +365,10 @@ void GfxDemo::frame()
 		d3d.depth_srv, 
 		&gbuffer_debug_cb_data, 
 		debug_rtv[0]);		
+	fx::ssr(&d3d, &gpu_env, &ssr_ctx,
+		normal_srv, debug_srv[0], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
 	
+	/*
 	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
 	//d[2] is now lum
 	d3d.immediate_ctx->GenerateMips(debug_srv[2]);
@@ -386,7 +392,7 @@ void GfxDemo::frame()
 	//resort to extra add b/c blend just doesn't seem to work
 	//fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
 	//	debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
-	
+	*/
 	if((debug_render_frame % 3 == 0) && do_anim) anim_frame++;
 	
 	//for debugging purposes
@@ -394,7 +400,7 @@ void GfxDemo::frame()
 	{
 		ID3D11Resource* backbuffer_tex;
 		d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
-		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_PNG, L"comparison/test.png");
+		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, L"comparison/test.bmp");
 		
 		backbuffer_tex->Release();
 	}
@@ -404,7 +410,7 @@ void GfxDemo::frame()
 
 void GfxDemo::load_models()
 {
-	if(0)
+	if(1)
 	{		
 		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref.fbx");
 		//model = asset::fbx::load_animated_fbx_model("assets/source/cb.fbx");
@@ -419,6 +425,7 @@ void GfxDemo::load_models()
 	dx = 0;
 	cam_focus[1] = 40;// model->center[1];
 	cam_focus[2] = 0;//model->center[2];
+
 	package::load_package(L"assets/ssr.package", &package);
 
 	d3d.create_draw_op(
@@ -456,4 +463,5 @@ void GfxDemo::load_shaders()
 	fx::make_gpu_env(&d3d, &gpu_env);
 	fx::make_fx_env(&d3d, &fx_env);
 	fx::make_tonemap_ctx(&d3d, &tonemap_ctx);
+	fx::make_ssr_ctx(&d3d, &ssr_ctx);
 }

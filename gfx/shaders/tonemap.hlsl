@@ -18,9 +18,11 @@ float4 vs(float3 position : POSITION) : SV_POSITION
 float4 ps( float4 position : SV_POSITION) : SV_Target
 {			
 	float3 tonemapped = 0;
-	for(int i = 0; i < MSAA_COUNT; i++)
+	float3 pix_coord = float3(position.xy, 0);
+	//for(int i = 0; i < MSAA_COUNT; i++)
+	int i = 1;
 	{
-		float3 linear_color = g_source.Load(int2(position.xy), i);
+		float3 linear_color = g_source.Load(pix_coord, i);
 
 		// from Naughty Dog's Filmic curves section
 		//float3 x = max(0, linear_color-0.004);
@@ -29,5 +31,5 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 
 		tonemapped += linear_color / (1 + linear_color);
 	}
-	return float4(tonemapped, 1) / MSAA_COUNT;
+	return float4(tonemapped, 1);
 }

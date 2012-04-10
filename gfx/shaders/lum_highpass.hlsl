@@ -18,11 +18,13 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 	//float3 source = g_source.Load(int3(position.xy, 0));
 	int passed = 0;
 	float3 total = 0;
-	for(int i = 0; i < MSAA_COUNT; i++)
+	float3 pix_coord = float3(position.xy, 0);
+	//for(int i = 0; i < MSAA_COUNT; i++)
+	int i = 1;
 	{
-		//float3 source = g_source.Load(int3(position.xy), i);
+		//float3 source = g_source.Load(pix_coord, i);
 		
-		float3 source = g_source.Load(int2(position.xy), i);
+		float3 source = g_source.Load(pix_coord, i);
 		float y = 0.2126 * source.r + 0.7152 * source.g + 0.0722 * source.b;
 		if(y>g_min_lum.x)
 		{

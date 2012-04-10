@@ -77,4 +77,5 @@ struct GfxDemo
 	fx::FXEnvironment fx_env;
 	fx::FXContext shade_gbuffer_ctx;
 	fx::FXContext tonemap_ctx;
+	fx::FXContext ssr_ctx;
 };

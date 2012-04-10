@@ -1,4 +1,4 @@
-#define MSAA_COUNT 4
+#define MSAA_COUNT 1
 #define DEPTH_MAX 0
 #define DEPTH_MIN 1
 

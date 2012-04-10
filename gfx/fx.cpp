@@ -426,4 +426,42 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
+	void make_ssr_ctx( Gfx* gfx, out FXContext* ctx )
+	{
+		gfx->create_shaders_and_il(L"shaders/ssr.hlsl", 
+			&ctx->vs, &ctx->ps);
+		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::FSQuadCb>();
+	}
+
+	void ssr( 
+		Gfx* gfx, 
+		const GpuEnvironment* gpu_env, 
+		const FXContext* fx_ctx, 
+		in Resource* normal, 
+		in Resource* color, 
+		in Resource* depth, 
+		in Resource* debug, 
+		out Target* output )
+	{
+		Target* targets[TARGETS_COUNT] = {output};
+		Resource* resources[RESOURCES_COUNT] = {normal, color, depth, debug};
+		Uniforms* uniforms[UNIFORMS_COUNT] = {gpu_env->fsquad_uniforms};
+
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+		gfx->immediate_ctx->VSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+		gfx->immediate_ctx->PSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+
+		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
+			&gpu_env->zero);
+
+		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
+
+		gfx->immediate_ctx->Draw(6, 0);
+	}
+
+
 };

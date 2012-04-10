@@ -56,7 +56,7 @@ VS2PS vs(App2VS IN)
 		OUT.normal = mul(skinned_normal, g_wv).xyz;
 		OUT.vs_pos = mul(float4(skinned_pos.xyz, 1), g_wv).xyz;
 	}
-	if(0)
+	if(1)
 	{		
 		OUT.position = mul(float4(IN.position.xyz, 1), g_wvp);
 		OUT.normal = mul(float4(IN.normal, 0), g_wv).xyz;

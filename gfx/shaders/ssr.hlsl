@@ -1,10 +1,5 @@
 #include "shader.h"
-/*
-Texture2DMS<float4, MSAA_COUNT> g_normal : register(t[0]);
-Texture2DMS<float3, MSAA_COUNT> g_albedo : register(t[1]);
-Texture2DMS<float, MSAA_COUNT> g_depth : register(t[2]);
-Texture2DMS<float4, MSAA_COUNT> g_debug: register(t[3]);
-*/
+
 #if MSAA_COUNT > 1
 Texture2DMS<float4, MSAA_COUNT> g_normal : register(t[0]);
 Texture2DMS<float3, MSAA_COUNT> g_albedo : register(t[1]);
@@ -39,6 +34,7 @@ VS2PS vs(float3 position : POSITION)
 }
 float4 ps( VS2PS IN) : SV_Target
 {		
+
 	uint2 vp_size;
 	uint vp_msaa_count;
 #if MSAA_COUNT > 1
@@ -47,8 +43,8 @@ float4 ps( VS2PS IN) : SV_Target
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 #endif
 	
-	//float3 pix_coord = float3(IN.position.xy, 0);
-	float2 pix_coord = float2(IN.position.xy);
+	float3 pix_coord = float3(IN.position.xy, 0);
+	//float2 pix_coord = float2(IN.position.xy);
 	bool DEBUG_SWITCH = false;
 	if(DEBUG_SWITCH)
 	{
@@ -57,7 +53,7 @@ float4 ps( VS2PS IN) : SV_Target
 		IN.viewspace_ray = float3( 0.024, 0.079, 1.000 );
 
 	}
-	else if( g_debug.Load(pix_coord, 0).x == 0)
+	else if(0)// g_debug.Load(pix_coord, 0).x == 0)
 	{
 		return g_albedo.Load(pix_coord, 0).xyzz;
 	}
@@ -91,8 +87,8 @@ float4 ps( VS2PS IN) : SV_Target
 	//if(DEBUG_SWITCH) return g_albedo.Load(IN.position, 0).xyzz;
 	if(DEBUG_SWITCH) s_vs_search_pos = s_vs_search_pos + 5 * s_vs_r;
 	int counter;
-	float increment = 0.3;
-	for(int i = 0; i < 1000; i++)
+	float increment = 1;
+	for(int i = 0; i < 100; i++)
 	{
 		counter++;
 		s_vs_search_pos += increment * s_vs_r;
@@ -111,8 +107,8 @@ float4 ps( VS2PS IN) : SV_Target
 		float s_vs_search_expected_z = s_vs_search_pos.z;
 
 		s_vp_search_pos = floor(s_vp_search_pos) + float2(0.5, 0.5);
-		//float s_ndc_search_depth = g_depth.Load(float3(s_vp_search_pos, 0));
-		float s_ndc_search_depth = g_depth.Load(float2(s_vp_search_pos), 0);
+		float s_ndc_search_depth = g_depth.Load(float3(s_vp_search_pos, 0));
+		//float s_ndc_search_depth = g_depth.Load(float2(s_vp_search_pos), 0);
 		float s_vs_search_actual_z = unproject_z(s_ndc_search_depth, g_proj_constants.xy);
 		float error = abs(s_vs_search_actual_z - s_vs_search_expected_z);
 
@@ -130,7 +126,7 @@ float4 ps( VS2PS IN) : SV_Target
 			{
 				//return 50 * error * RED; 
 				//return blend_factor * .6 * g_albedo.Load(float3(s_vp_search_pos, 0)).xyzz + .4;
-				return blend_factor * .6 * g_albedo.Load(float2(s_vp_search_pos), 0).xyzz + .4;
+				return float4(g_albedo.Load(float3(s_vp_search_pos, 0), 0).xyz, 1);
 				break;
 			}
 		}		
@@ -139,7 +135,7 @@ float4 ps( VS2PS IN) : SV_Target
 	//return RED;
 	//return counter/2000.0 * RED;
 	//return RED;
-	return .8;
-	//return g_albedo.Load(pix_coord, 0).xyzz;;
+	return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
+	//return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
 
 }

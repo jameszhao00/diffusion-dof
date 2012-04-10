@@ -71,6 +71,7 @@ namespace fx
 	void make_fx_env(Gfx* gfx, out FXEnvironment* env);
 	void make_gpu_env(Gfx* gfx, out GpuEnvironment* env);
 
+	void make_ssr_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_tonemap_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_luminance_ctx(Gfx* gfx, out FXContext* ctx);
 	void make_resolve_ctx(Gfx* gfx, out FXContext* ctx);
@@ -132,6 +133,14 @@ namespace fx
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
 		in Resource* input,
+		out Target* output);
+	void ssr(Gfx* gfx, 
+		const GpuEnvironment* gpu_env,
+		const FXContext* fx_ctx,
+		in Resource* normal,
+		in Resource* color,
+		in Resource* depth,
+		in Resource* debug,
 		out Target* output);
 	void update_gpu_env(Gfx* gfx,		
 		const d3d::cbuffers::FSQuadCb* fsquad_cb_data,
