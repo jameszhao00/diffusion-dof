@@ -19,8 +19,7 @@ SIZE Window::size() const
 LRESULT CALLBACK MessageProc(HWND wnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	// Send event message to AntTweakBar
-	//TWFUNC if (TwEventWin(wnd, message, wParam, lParam))
-	//TWFUNC 	return 0; // Event has been handled by AntTweakBar
+	if (TwEventWin(wnd, message, wParam, lParam)) return 0; // Event has been handled by AntTweakBar
 
 	switch (message) 
 	{

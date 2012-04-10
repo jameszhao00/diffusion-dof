@@ -4,6 +4,7 @@
 #include <memory>
 #include <hash_map>
 
+
 using namespace std;
 struct Ray
 {

@@ -3,6 +3,8 @@
 *.DS_Store
 
 #Visual Studio files
+*My Inspector XE Results*
+
 *.[Oo]bj
 *.user
 *.aps

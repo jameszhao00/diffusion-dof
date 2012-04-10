@@ -4,6 +4,11 @@
 
 #include "d3d.h"
 #include "window.h"
+int getref(IUnknown* ptr)
+{
+	ptr->AddRef();
+	return ptr->Release();
+}
 DXGI_SWAP_CHAIN_DESC make_swap_chain_desc(const Window & window)
 {
 	DXGI_SWAP_CHAIN_DESC swap_chain_desc;
@@ -69,19 +74,19 @@ void D3D::create_draw_op(
 {
 	//WARNING: D3D11_BIND_SHADER_RESOURCE not usually necessary...
 	//just for testing
-	ID3D11Buffer* vb_buffer = create_buffer(vb, vb_stride * vertex_count,
-		(D3D11_BIND_FLAG)( D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE));
-	draw_op->vb = vb_buffer;
+	create_buffer(vb, vb_stride * vertex_count,
+		(D3D11_BIND_FLAG)( D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE), &draw_op->vb.p);
+
 	d3d::name(draw_op->vb.p, "drawop vb");
-	draw_op->ib.Attach(create_buffer((char*)ib, sizeof(unsigned int) * indices_count, 
-		(D3D11_BIND_FLAG)( D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE)));
+	create_buffer((char*)ib, sizeof(unsigned int) * indices_count, 
+		(D3D11_BIND_FLAG)( D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE), &draw_op->ib.p);
 	d3d::name(draw_op->ib.p, "drawop ib");
 	draw_op->ib_count = indices_count;
 	draw_op->vb_stride = vb_stride;
 	draw_op->il.Attach(il);
 }
 
-ID3D11Buffer* D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag)
+void D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf)
 {
 	D3D11_BUFFER_DESC bd;
 	bd.Usage = D3D11_USAGE_IMMUTABLE;
@@ -95,10 +100,9 @@ ID3D11Buffer* D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLA
 	initial_data.SysMemPitch = 0;
 	initial_data.SysMemSlicePitch = 0;
 
-	ID3D11Buffer* buffer;
-
-	device->CreateBuffer(&bd, &initial_data, &buffer);
-	return buffer;
+	device->CreateBuffer(&bd, &initial_data, buf);
+	int r = getref(*buf);
+	
 }
 
 void D3D::init(Window & window)
@@ -139,7 +143,7 @@ void D3D::init(Window & window)
 
 	set_viewport(window.size());
 
-	//TWFUNC TwInit(TW_DIRECT3D11, device);
+	TwInit(TW_DIRECT3D11, device);
 	
 }
 
@@ -157,7 +161,7 @@ void D3D::set_viewport(SIZE size)
 }
 void D3D::swap_buffers()
 {
-	//TWFUNC TwDraw();
+	TwDraw();
 	swap_chain->Present(0, 0);	
 }
 

@@ -117,6 +117,9 @@ namespace fx
 				gfx::VertexTypes::eFSQuad);
 			env->fsquad_stride = 3 * sizeof(float);
 			env->zero = 0;
+			
+				d3d::name(vs, "fsquad dummy");
+				d3d::name(ps, "fsquad dummy");
 			vs->Release(); 
 			ps->Release();
 			//fs quad vb
@@ -130,10 +133,13 @@ namespace fx
 					1, -1, 0,
 					-1, -1, 0
 				};
-
-				env->fsquad_vb = 
-					gfx->create_buffer((char*)fsquad_data, sizeof(fsquad_data), 
-					D3D11_BIND_VERTEX_BUFFER);
+				
+					gfx->create_buffer((char*)fsquad_data, 
+						sizeof(fsquad_data), 
+					D3D11_BIND_VERTEX_BUFFER,
+					&env->fsquad_vb.p);
+				int ref = getref(env->fsquad_vb);
+				d3d::name(env->fsquad_vb.p, "fsquad");
 			}
 		}
 	}

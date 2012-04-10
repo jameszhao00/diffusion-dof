@@ -53,7 +53,6 @@ struct GfxDemo
 	CComPtr<ID3D11DepthStencilState> inverted_ds_state; 
 
 	bool invert_depth;
-	CComPtr<ID3D11Buffer> fsquad_vb;
 	d3d::DrawOp drawop;
 	package::Package package;
 	shared_ptr<Model> model;

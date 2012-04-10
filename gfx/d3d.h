@@ -8,6 +8,8 @@ struct Window;
 #define MSAA_COUNT 4
 #define MSAA_SRV_VIEW_DESC D3D11_SRV_DIMENSION_TEXTURE2DMS
 #define MSAA_DSV_VIEW_DESC D3D11_DSV_DIMENSION_TEXTURE2DMS
+
+int getref(IUnknown* ptr);
 namespace d3d
 {
 	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile);
@@ -94,8 +96,8 @@ struct D3D
 	void swap_buffers();
 	
 	template<typename T>
-	ID3D11Buffer* create_buffer(const gfx::Data<T> * data, D3D11_BIND_FLAG bind_flag);
-	ID3D11Buffer* create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag);
+	void create_buffer(const gfx::Data<T> * data, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf);
+	void create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf);
 	template<typename T>
 	ID3D11Buffer* create_cbuffer();	
 	template<typename T>
@@ -134,9 +136,9 @@ private:
 };
 
 template<typename T>
-ID3D11Buffer* D3D::create_buffer(const gfx::Data<T> * data, D3D11_BIND_FLAG bind_flag)
+void D3D::create_buffer(const gfx::Data<T> * data, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf)
 {		
-	return create_buffer((const char*)data->ptr, data->byte_size, bind_flag);
+	return create_buffer((const char*)data->ptr, data->byte_size, bind_flag, buf);
 }
 template<typename T>
 ID3D11Buffer* D3D::create_cbuffer()

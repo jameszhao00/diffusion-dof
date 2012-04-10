@@ -12,11 +12,6 @@ using namespace std;
 #define inout
 #define out
 
-int getref(IUnknown* ptr)
-{
-	ptr->AddRef();
-	return ptr->Release();
-}
 void resize(ID3D11Texture2D** texture,
 			ID3D11Device* device,
 			int w, int h)
@@ -153,7 +148,7 @@ void GfxDemo::init(HINSTANCE instance)
 	light_dir_ws[0] = 0;
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
-	/*
+	
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "");
 	TwAddVarRW(bar, "Invert Depth", TW_TYPE_BOOLCPP, &invert_depth, "");
@@ -165,7 +160,7 @@ void GfxDemo::init(HINSTANCE instance)
 	
 	TwAddVarRW(bar, "Use Fresnel", TW_TYPE_BOOLCPP, &use_fresnel, "");
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
-	*/
+	
 	cam_dist = 100;
 	
 
@@ -176,7 +171,7 @@ void GfxDemo::init(HINSTANCE instance)
 	ds_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	d3d.immediate_ctx->OMGetDepthStencilState(&ds_state, nullptr);
 	d3d.device->CreateDepthStencilState(&ds_desc, &inverted_ds_state);
-
+	d3d::name(inverted_ds_state.p, "inverted ds");
     
 }
 #include <iostream>
@@ -391,8 +386,6 @@ void GfxDemo::load_models()
 		1, -1, 0,
 		-1, -1, 0
 	};
-
-	fsquad_vb = d3d.create_buffer((char*)fsquad_data, sizeof(fsquad_data), D3D11_BIND_VERTEX_BUFFER);
 	if(0)
 	{		
 		model = asset::fbx::load_animated_fbx_model("assets/source/dude.fbx");
@@ -420,18 +413,17 @@ void GfxDemo::load_models()
 
 	for(int i = 0; i < package.textures.size(); i++)
 	{
-		ID3D11ShaderResourceView* srv;
+		CComPtr<ID3D11ShaderResourceView> srv;
 		auto hr = D3DX11CreateShaderResourceViewFromMemory(
 			d3d.device, 
 			package.textures.at(i).data, 
 			package.textures.at(0).byte_size, 
 			nullptr,
 			nullptr, 
-			&srv,
+			&srv.p,
 			nullptr);
 		textures.push_back(srv);
 	}
-
 	
 	
 }
