@@ -255,13 +255,14 @@ void GfxDemo::frame()
 	gbuffer_debug_cb_data.light_dir_ws[1] = 500 * light_dir_ws[1];
 	gbuffer_debug_cb_data.light_dir_ws[2] = 500 * light_dir_ws[2];
 	gbuffer_debug_cb_data.light_dir_ws[3] = 1;
-	
+	/*
 	auto joint_n = package.skeletal_animations[0].joints_count;
 	auto frame_n = package.skeletal_animations[0].frames_count;
 	int frame = anim_frame % frame_n;
 	auto bone_data = &package.skeletal_animations[0].data[frame * joint_n];
-	memcpy(&object_animation_cb_data, bone_data, sizeof(package::m44) * joint_n);
 	
+	memcpy(&object_animation_cb_data, bone_data, sizeof(package::m44) * joint_n);
+	*/
 	
 	SIZE window_size = window.size();
 
@@ -380,11 +381,11 @@ void GfxDemo::frame()
 	//d[2] now has color
 	float dummy[4];
 	//d3d.immediate_ctx->OMSetBlendState(gpu_env.additive_blend, dummy, 1);
-	fx::tonemap(&d3d, &gpu_env, &tonemap_ctx, debug_srv[0], debug_rtv[2]);
+	fx::tonemap(&d3d, &gpu_env, &tonemap_ctx, debug_srv[0], d3d.back_buffer_rtv);
 	//d3d.immediate_ctx->OMSetBlendState(gpu_env.standard_blend, dummy, 1);
 	//resort to extra add b/c blend just doesn't seem to work
-	fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
-		debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
+	//fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
+	//	debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
 	
 	if((debug_render_frame % 3 == 0) && do_anim) anim_frame++;
 	
@@ -405,7 +406,7 @@ void GfxDemo::load_models()
 {
 	if(0)
 	{		
-		model = asset::fbx::load_animated_fbx_model("assets/source/dude.fbx");
+		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref.fbx");
 		//model = asset::fbx::load_animated_fbx_model("assets/source/cb.fbx");
 	
 	
