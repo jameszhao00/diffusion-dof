@@ -330,7 +330,9 @@ void GfxDemo::frame()
 	}
 	fsquad_cb_data.proj_constants[0] = f / (f - n);
 	fsquad_cb_data.proj_constants[1] = (-f * n) / (f - n);
-	auto p = XMMatrixPerspectiveFovLH(XM_PI / 4.0f, window_size.cx / (float)window_size.cy, n, f);//1, 1000);
+	float fov = XM_PI / 4.0f;
+	fsquad_cb_data.debug_vars[0] = cos(fov * 0.5 )/sin(fov * 0.5 );
+	auto p = XMMatrixPerspectiveFovLH(fov, window_size.cx / (float)window_size.cy, n, f);//1, 1000);
 	//auto p = XMMatrixPerspectiveLH(100, 100, n, f);//1, 1000);
 	
 	auto wv = XMMatrixMultiply(w, v);
@@ -409,6 +411,7 @@ void GfxDemo::frame()
 		&gbuffer_debug_cb_data, 
 		debug_rtv[0]);		
 	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
+	d3d.immediate_ctx->PSSetSamplers(1, 1, &gpu_env.aniso_sampler.p);
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx,
 		normal_srv, debug_srv[0], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
 	

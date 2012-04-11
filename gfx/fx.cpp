@@ -105,7 +105,9 @@ namespace fx
 		
 		CD3D11_SAMPLER_DESC  linear_sampler_desc(D3D11_DEFAULT);
 		gfx->device->CreateSamplerState(&linear_sampler_desc, &env->linear_sampler);
-		
+		linear_sampler_desc.MaxAnisotropy = 16;
+		linear_sampler_desc.Filter = D3D11_FILTER_ANISOTROPIC;
+		gfx->device->CreateSamplerState(&linear_sampler_desc, &env->aniso_sampler);
 		//fsquad
 		{
 			

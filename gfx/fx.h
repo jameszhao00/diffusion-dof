@@ -55,6 +55,7 @@ namespace fx
 	//d3d states, etc
 	struct GpuEnvironment
 	{
+		CComPtr<ID3D11SamplerState> aniso_sampler;
 		CComPtr<ID3D11SamplerState> linear_sampler;
 		CComPtr<ID3D11BlendState> additive_blend;
 		CComPtr<ID3D11BlendState> standard_blend;

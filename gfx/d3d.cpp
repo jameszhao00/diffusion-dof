@@ -250,7 +250,7 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 	ps_blob->Release();
 	if(gs != nullptr)
 	{
-		auto gs_blob = d3d::load_shader(file, "gs", "gs_5_0");
+		auto gs_blob = d3d::load_shader(file, "gs", "gs_4_0");
 		device->CreateGeometryShader(gs_blob->GetBufferPointer(), gs_blob->GetBufferSize(), nullptr, gs);
 		gs_blob->Release();
 	
@@ -307,8 +307,10 @@ namespace d3d
 	{
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
-		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 
-			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG, 0, 0, &shader_bin, &error_bin, nullptr);
+		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
+			//D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
+			//| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
+			, 0, 0, &shader_bin, &error_bin, nullptr);
 		if((error_bin != nullptr) || FAILED(hr))
 		{
 			const char * msg = nullptr;
