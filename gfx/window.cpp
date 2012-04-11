@@ -2,6 +2,7 @@
 #include "window.h"
 #include <AntTweakBar.h>
 #include <map>
+#include "gfxdemo.h"
 
 std::map<Handle, Window*> active_windows;
 

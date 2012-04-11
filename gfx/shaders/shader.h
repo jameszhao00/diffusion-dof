@@ -35,13 +35,20 @@ float2 ndc_to_vp(float2 vp_size, float3 ndc)
 	v.y = (.5 - ndc.y / 2) * vp_size.y;
 	return v;
 }
-
+/*
+this does NOT convert to UVs...
 float2 vp_to_uv(float2 vp_size, float2 p)
 {
 	float2 v;
 	v.x = -1 + 2 * p.x / vp_size.x;
 	v.y = 1 - 2 * p.y / vp_size.y;
 	return v;
+}
+*/
+
+float2 vp_to_uv(float2 vp_size, float2 p)
+{
+	return p / vp_size;
 }
 
 float2 vs_to_vp(float3 vs_pos, float2 vp_size, float4x4 proj)

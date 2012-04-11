@@ -1,10 +1,5 @@
 #include "shader.h"
-SamplerState g_blur_sampler
-{
-    Filter = MIN_MAG_MIP_LINEAR;
-    AddressU = Clamp;
-    AddressV = Clamp;
-};
+SamplerState g_blur_sampler;
 //#if MSAA_COUNT > 1
 //Texture2D<float4, MSAA_COUNT> g_source : register(t0);
 //#else

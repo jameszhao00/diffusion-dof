@@ -69,6 +69,7 @@ struct GfxDemo
 	Window window;
 	D3D d3d;
 	bool use_fresnel;
+	bool is_top;
 
 	float obj_ori[4];
 	float cam_dist;
@@ -78,4 +79,5 @@ struct GfxDemo
 	fx::FXContext shade_gbuffer_ctx;
 	fx::FXContext tonemap_ctx;
 	fx::FXContext ssr_ctx;
+	char* save_name;
 };

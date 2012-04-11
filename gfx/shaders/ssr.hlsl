@@ -1,4 +1,5 @@
 #include "shader.h"
+SamplerState g_linear;
 
 #if MSAA_COUNT > 1
 Texture2DMS<float4, MSAA_COUNT> g_normal : register(t[0]);
@@ -85,14 +86,16 @@ float4 ps( VS2PS IN) : SV_Target
 		//if(length(c - IN.position.xy) < 5) return RED;
 	}
 	//if(DEBUG_SWITCH) return g_albedo.Load(IN.position, 0).xyzz;
-	if(DEBUG_SWITCH) s_vs_search_pos = s_vs_search_pos + 5 * s_vs_r;
+	if(DEBUG_SWITCH) s_vs_search_pos = s_vs_search_pos + s_vs_r;
 	int counter;
 	float increment = 1;
-	for(int i = 0; i < 100; i++)
+	float last_test_z_vs_err = 1000; //actual - expected ... z error in VS 
+	float3 last_test_vs_pos = s_vs_search_pos;
+	for(int i = 0; i < 25; i++)
 	{
 		counter++;
 		s_vs_search_pos += increment * s_vs_r;
-		//increment += 0.1;
+		
 		float2 s_vp_search_pos = vs_to_vp(s_vs_search_pos, vp_size, g_proj);
 
 		if(
@@ -103,39 +106,58 @@ float4 ps( VS2PS IN) : SV_Target
 		{
 			break;
 		}
-
 		float s_vs_search_expected_z = s_vs_search_pos.z;
 
-		s_vp_search_pos = floor(s_vp_search_pos) + float2(0.5, 0.5);
-		float s_ndc_search_depth = g_depth.Load(float3(s_vp_search_pos, 0));
-		//float s_ndc_search_depth = g_depth.Load(float2(s_vp_search_pos), 0);
+		float2 uv_search_pos = vp_to_uv(vp_size, s_vp_search_pos);
+		
+		float s_ndc_search_depth = g_depth.SampleGrad (g_linear, uv_search_pos, 0, 0);
 		float s_vs_search_actual_z = unproject_z(s_ndc_search_depth, g_proj_constants.xy);
-		float error = abs(s_vs_search_actual_z - s_vs_search_expected_z);
+		float error = s_vs_search_actual_z - s_vs_search_expected_z;
 
 		if(DEBUG_SWITCH)
 		{
-			if(length(s_vp_search_pos - IN.position.xy) < 3)
+			if(length(s_vp_search_pos - IN.position.xy) < 5)
 			{
 				return RED;
 			}
-			if(error < .5) break;
+			if(abs(error) < .5) break;
 		}
 		else
 		{
-			if(error < 2)
+			if(
+				abs(error) < 5 && //current error is acceptable
+				abs(last_test_z_vs_err < 5) && //last error is acceptable
+				(sign(error) != sign(last_test_z_vs_err)) //we've crossed a boundary
+				)
+			{
+				//interpolate between them
+				//using last z error vs current z error
+				float err_ratio = abs(last_test_z_vs_err) / (abs(error) + abs(last_test_z_vs_err));
+				
+				float3 interpolated_sample_pos_vs = lerp(last_test_vs_pos, s_vs_search_pos, err_ratio);				
+
+				float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
+								
+				float2 interpolated_sample_pos_uv = vp_to_uv(vp_size, interpolated_sample_pos_vp);
+
+				return float4(g_albedo.SampleGrad(g_linear, interpolated_sample_pos_uv, 0, 0), 1);
+			}
+			/*
+			if(abs(error) < .5)
 			{
 				//return 50 * error * RED; 
 				//return blend_factor * .6 * g_albedo.Load(float3(s_vp_search_pos, 0)).xyzz + .4;
-				return float4(g_albedo.Load(float3(s_vp_search_pos, 0), 0).xyz, 1);
+				//return float4(g_albedo.Load(float3(s_vp_search_pos, 0), 0).xyz, 1);
+				return float4(g_albedo.SampleGrad(g_linear, uv_search_pos, 0, 0), 1);
 				break;
 			}
+			*/
 		}		
+		last_test_vs_pos = s_vs_search_pos;
+		last_test_z_vs_err = error;
 	}
-	//if(DEBUG_SWITCH) return g_albedo.Load(int3(IN.position.xy, 0), 0).xyzz;
-	//return RED;
-	//return counter/2000.0 * RED;
+	if(DEBUG_SWITCH) return g_albedo.Load(int3(IN.position.xy, 0), 0).xyzz;
 	//return RED;
 	return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
-	//return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
 
 }

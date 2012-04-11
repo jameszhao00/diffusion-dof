@@ -3,7 +3,6 @@
 #include "fbx.h"
 #include "package.h"
 #include <iostream>
-
 using namespace std;
 
 //using namespace DirectX;
@@ -134,7 +133,36 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d::name(debug_srv[1].p, "debug");
 	d3d::name(debug_srv[2].p, "debug");
 }
+void TW_CALL CopyCDStringToClient(char **destPtr, const char *src)
+{
+	size_t srcLen = (src!=NULL) ? strlen(src) : 0;
+	size_t destLen = (*destPtr!=NULL) ? strlen(*destPtr) : 0;
 
+	// alloc or realloc dest memory block if needed
+	if( *destPtr==NULL )
+		*destPtr = (char *)malloc(srcLen+1);
+	else if( srcLen>destLen )
+		*destPtr = (char *)realloc(*destPtr, srcLen+1);
+
+	// copy src
+	if( srcLen>0 )
+		strncpy(*destPtr, src, srcLen);
+	(*destPtr)[srcLen] = '\0'; // null-terminated string
+}
+void TW_CALL save_img_callback(void *ptr)
+{ 
+	GfxDemo* demo = (GfxDemo*)ptr;
+	ID3D11Resource* backbuffer_tex;
+	demo->d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
+
+	std::string s(demo->save_name);
+	std::wstring ws;
+	ws.assign(s.begin(), s.end());
+	ws = L"comparison/" + ws + L".bmp";
+
+	D3DX11SaveTextureToFile(demo->d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, ws.c_str());
+	backbuffer_tex->Release();
+}
 void GfxDemo::init(HINSTANCE instance)
 {
 	//weird... why do we need to initalize?
@@ -155,7 +183,7 @@ void GfxDemo::init(HINSTANCE instance)
 	load_models();
 	init_gbuffers(window.size().cx, window.size().cy);
 	
-	
+	is_top=false;
     TwBar *bar = TwNewBar("Scene");
 
 	//obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
@@ -165,9 +193,15 @@ void GfxDemo::init(HINSTANCE instance)
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
 	do_anim = false;
+	TwCopyCDStringToClientFunc(CopyCDStringToClient); // CopyCDStringToClient implementation is given above
+	TwAddVarRW(bar, "Image Name", TW_TYPE_CDSTRING, &save_name, "");
+	TwAddButton(bar, "Save Image", save_img_callback, this, "");
+	save_name = strdup("");
+
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
-	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "");
+	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "step=0.001");
 	TwAddVarRW(bar, "Anim", TW_TYPE_BOOLCPP, &do_anim, "");
+	TwAddVarRW(bar, "Is Top", TW_TYPE_BOOLCPP, &is_top, "");
 	TwAddVarRW(bar, "Frame", TW_TYPE_UINT32, &anim_frame, "");
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
@@ -176,8 +210,9 @@ void GfxDemo::init(HINSTANCE instance)
 	
 	TwAddVarRW(bar, "Use Fresnel", TW_TYPE_BOOLCPP, &use_fresnel, "");
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
+
 	
-	cam_dist = 100;
+	cam_dist = 1;
 	
 
 	D3D11_DEPTH_STENCIL_DESC ds_desc;
@@ -272,7 +307,15 @@ void GfxDemo::frame()
 	cam_focus[0] = dx;
 
 	//auto v = XMMatrixLookAtLH(XMVectorSet(cam_focus[0], cam_focus[1], cam_focus[2] - cam_dist, 1), XMLoadFloat4((XMFLOAT4*)cam_focus), XMVectorSet(0, 1, 0, 0));
-	auto v = XMMatrixLookAtLH(XMVectorSet(0, 50, -90, 1), XMVectorSet(0, 0, 0, 1), XMVectorSet(0, 1, 0, 0));
+	XMMATRIX v;
+	if(is_top)
+	{
+		v = XMMatrixLookAtLH(XMVectorSet(0, 80, 0, 1), XMVectorSet(0, 0, 0, 1), XMVectorSet(0, 0, 1, 0));
+	}
+	else
+	{
+		v = XMMatrixLookAtLH(XMVectorSet(0, 50 * cam_dist, -90 * cam_dist, 1), XMVectorSet(0, 0, 0, 1), XMVectorSet(0, 1, 0, 0));
+	}
 
 
 	
@@ -365,6 +408,7 @@ void GfxDemo::frame()
 		d3d.depth_srv, 
 		&gbuffer_debug_cb_data, 
 		debug_rtv[0]);		
+	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx,
 		normal_srv, debug_srv[0], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
 	
@@ -396,12 +440,20 @@ void GfxDemo::frame()
 	if((debug_render_frame % 3 == 0) && do_anim) anim_frame++;
 	
 	//for debugging purposes
-	if(debug_render_frame == 0)
+	if(debug_render_frame < 2)
 	{
 		ID3D11Resource* backbuffer_tex;
 		d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
-		D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, L"comparison/test.bmp");
-		
+		if(debug_render_frame == 0)	
+		{
+			D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, L"comparison/front.bmp");
+			is_top = true;
+		}
+		else if(debug_render_frame == 1)
+		{
+			D3DX11SaveTextureToFile(d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, L"comparison/top.bmp");
+			is_top=false;
+		}
 		backbuffer_tex->Release();
 	}
 	debug_render_frame++;
