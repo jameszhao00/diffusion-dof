@@ -14,7 +14,7 @@ Texture2D<float> g_depth : register(t[2]);
 Texture2D<float4> g_debug: register(t[3]);
 #endif
 #define z_error_bounds 25
-#define base_increment 40
+#define base_increment 10
 cbuffer FSQuadCB
 {	
 	float4x4 g_inv_p;
@@ -193,7 +193,8 @@ float4 ps(VS2PS IN) : SV_TARGET
 	float max_t = -1;
 	float2 max_pos_vp = -1;
 	bool detailed_search = false;
-	for(int i = 0; i < max(vp_size.x, vp_size.y) / base_increment; i++)
+	float target_t = 0;
+	for(int i = 0; i < 800 / base_increment; i++)
 	{
 		s_pos_ss += base_increment * (r_ss);
 		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
@@ -207,44 +208,73 @@ float4 ps(VS2PS IN) : SV_TARGET
 
 		float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
 		
-		if(closer_ndc(s_actual_z_ndc, s_desired_z_ndc))
-		{			
-			detailed_search = true;
-			break;
-		}
 		if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.000001)
 		{
 			target_vp = s_pos_ss;
+		}
+		else if(closer_ndc(s_actual_z_ndc, s_desired_z_ndc))
+		{			
+			detailed_search = true;
+			break;
 		}
 		min_t = max_t;
 		min_pos_vp = max_pos_vp;
 	}
 	if(detailed_search)
 	{
-		s_pos_ss = min_pos_vp;
+		s_pos_ss = min_pos_vp - r_ss * 2;
+		max_t += 2;
+		float previous_t = min_t;
+		float previous_z_error_ndc = 1000;
+		float previous_z_ndc = 0;
 		for(int i = 0; i < 500; i++)
 		{
-			s_pos_ss += r_ss;
+			s_pos_ss += 2 * r_ss;
 			float t = vpy_to_t(s_pos_ss.yy, half_cot_fov, vp_size, pos_vs, r_vs);
 			if(t > max_t) break; 
 			float s_desired_z_ndc = 
 				(g_proj_constants[1] + g_proj_constants[0]*(r_vs.z * t + pos_vs.z)) / 
 				(r_vs.z * t + pos_vs.z);
-				
+			
 			float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
-			if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.00005)
+			float z_error_ndc = s_actual_z_ndc - s_desired_z_ndc;
+
+			if((previous_z_error_ndc < 0) && (z_error_ndc > 0) && abs(previous_z_ndc - s_actual_z_ndc) < 0.0003)
 			{
-				target_vp = s_pos_ss;
+				//we've crossed the boundary
+				float3 previous_ray_pos_vs = pos_vs + previous_t * r_vs;
+				float3 current_ray_pos_vs = pos_vs + t * r_vs;
+				float previous_actual_z_vs = unproject_z(previous_z_ndc, g_proj_constants.xy);
+				float current_actual_z_vs = unproject_z(s_actual_z_ndc, g_proj_constants.xy);
+				float error_ratio = abs(previous_actual_z_vs - previous_ray_pos_vs.z) / 
+					(abs(previous_actual_z_vs - previous_ray_pos_vs.z) + abs(current_actual_z_vs - current_ray_pos_vs.z));
+
+				float3 interpolated_sample_pos_vs = lerp(previous_ray_pos_vs, current_ray_pos_vs, error_ratio);
+				float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
+
+				target_vp = interpolated_sample_pos_vp;
+				target_t = t;
 				break;
 			}
+			
+			previous_z_error_ndc = z_error_ndc;
+			previous_t = t;
+			previous_z_ndc = s_actual_z_ndc;
 		}
 	}
+	float3 normal = g_normal.Load(float3(target_vp, 0));
+	float angle_blend = saturate(pow(dot(-normal.xyz, dir_vs), 3));
+	float silhouette_blend = pow(saturate(dot(r_vs, -normal) + 0.57), 18);
+	float blend = angle_blend * silhouette_blend;
+	float distance_blend = 1 - pow(saturate(target_t / 30), 2);
+	float mip_bias = 0;//(1 - distance_blend) * 3;
 	//float4 d = debug(IN); if(length(d) > 0) return d;
-	if(target_vp.x != -1 && target_vp.y != -1)
-	{
-		//we found something!		
-		return float4(g_albedo.Load(float3(target_vp, 0), 0).xyz, 1);
-	}
-	return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
+	float4 color = float4(g_albedo.Load(pix_coord, 0).xyz, 1);
 
+	if(target_vp.x != -1 && target_vp.y != -1)
+	{	
+		//we found something!		
+		return color * (1-blend) + blend * float4(g_albedo.SampleBias(g_linear, vp_to_uv(vp_size, target_vp), mip_bias), 1);
+	}
+	return color;
 }

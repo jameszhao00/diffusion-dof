@@ -473,11 +473,14 @@ void GfxDemo::frame()
 		normal_srv, 
 		d3d.depth_srv, 
 		&gbuffer_debug_cb_data, 
-		debug_rtv[0]);		
+		debug_rtv[2]);		
+
+	d3d.immediate_ctx->GenerateMips(debug_srv[2]);
+
 	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 	d3d.immediate_ctx->PSSetSamplers(1, 1, &gpu_env.aniso_sampler.p);
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx,
-		normal_srv, debug_srv[0], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
+		normal_srv, debug_srv[2], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
 	
 	/*
 	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
@@ -531,13 +534,13 @@ void GfxDemo::load_models()
 {
 	if(1)
 	{		
-		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref2.fbx", &cameras);
+		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref3.fbx", &cameras);
 		//model = asset::fbx::load_animated_fbx_model("assets/source/cb.fbx");
 	
 	
 		list<const Model*> models;
 		models.push_back(model.get());
-		package::bake_package(L"assets/ssr2.package", &models);
+		package::bake_package(L"assets/ssr3.package", &models);
 	}
 	
 	cam_focus[0] = 0;//model->center[0];
@@ -545,7 +548,7 @@ void GfxDemo::load_models()
 	cam_focus[1] = 40;// model->center[1];
 	cam_focus[2] = 0;//model->center[2];
 
-	package::load_package(L"assets/ssr2.package", &package);
+	package::load_package(L"assets/ssr3.package", &package);
 
 	d3d.create_draw_op(
 		package.meshes[0].verticies, 
