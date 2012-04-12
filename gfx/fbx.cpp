@@ -13,9 +13,7 @@
 #include <xnamath.h>
 
 #include <fbxsdk.h>
-#include <glm/glm.hpp>
 
-using namespace glm;
 using namespace std;
 using namespace gfx;
 namespace asset
@@ -393,6 +391,21 @@ namespace asset
 
 			return gfx_model;
 		}
+		void find_nodes(KFbxNode* node, KFbxNodeAttribute::EAttributeType type, list<KFbxNode*>* output)
+		{
+			auto attribute = node->GetNodeAttribute();
+			if(attribute != nullptr)
+			{
+				if(attribute->GetAttributeType() == type)
+				{
+					output->push_back(node);
+				}
+			}
+			for(int i = 0; i < node->GetChildCount(); i++) 
+			{
+				find_nodes(node->GetChild(i), type, output);
+			}
+		}
 		KFbxNode * find_mesh_node(KFbxNode * node)
 		{
 			auto attribute = node->GetNodeAttribute();
@@ -411,7 +424,12 @@ namespace asset
 			return nullptr;
 		}
 
-		shared_ptr<Model> load_animated_fbx_model(const char * path)
+
+		vec3 to_glm(fbxDouble3 d3)
+		{
+			return vec3(d3.mData[0], d3.mData[1], d3.mData[2]);
+		}
+		shared_ptr<Model> load_animated_fbx_model(const char * path, vector<Camera>* cameras)
 		{	
 
 			auto sdk_manager = KFbxSdkManager::Create();
@@ -436,11 +454,10 @@ namespace asset
 			if (current_axis != desired_axis)
 			{
 				desired_axis.ConvertScene(scene);
-			}
-
+			}			
 		
-			KFbxGeometryConverter geo_converter(sdk_manager);;
-
+			KFbxGeometryConverter geo_converter(sdk_manager);;	
+			
 
 			auto mesh_node = find_mesh_node(scene->GetRootNode());
 			assert(mesh_node != nullptr);
@@ -449,7 +466,136 @@ namespace asset
 			assert(mesh->SplitPoints(KFbxLayerElement::ELayerElementType::eNORMAL));
 			//need 1 uv / vert
 			assert(mesh->SplitPoints(KFbxLayerElement::ELayerElementType::eDIFFUSE_TEXTURES));
-			
+
+			//all the PREPROCESSING's done	
+			list<KFbxNode*> camera_nodes;
+			find_nodes(scene->GetRootNode(), KFbxNodeAttribute::eCAMERA, &camera_nodes);
+			//this camera code doesn't work ;(
+			for(auto it = camera_nodes.cbegin(); it != camera_nodes.cend(); it++)
+			{
+				Camera cam;
+				auto camera_node = (*it);
+				auto camera = camera_node->GetCamera();
+				cam.eye = to_glm(camera->Position.Get());
+				cam.up = to_glm(camera->UpVector.Get());
+				KFbxXMatrix rot;
+				auto target = camera_node->GetTarget();
+				assert(target != nullptr);
+				cam.focus = to_glm(scene->GetEvaluator()->GetNodeGlobalTransform(target).GetT());
+				cam.n = camera->GetNearPlane(); cam.f = camera->GetFarPlane();
+
+				auto mode = camera->GetAspectRatioMode();
+				assert(mode == KFbxCamera::eWINDOW_SIZE);
+				
+				cam.aspect_ratio = camera->AspectWidth.Get() / camera->AspectHeight.Get();
+				
+
+				//from FBX SDK
+				//dealing with aperture ratios... and FOVs
+				//(a giant mess)
+				{
+					//align up vector
+
+					auto lForward = cam.focus - cam.eye;
+					lForward = glm::normalize(lForward);
+					auto lRight = cross(lForward, cam.up);
+					lRight = normalize(lRight);
+					//flipped the cros sproduct order
+					cam.up = cross(lForward, lRight);
+					cam.up = normalize(cam.up);
+
+
+
+					auto lCamera = camera;
+					double lFilmHeight = lCamera->GetApertureHeight();
+					double lFilmWidth = lCamera->GetApertureWidth() * lCamera->GetSqueezeRatio();
+					//here we use Height : Width
+					double lApertureRatio = lFilmHeight / lFilmWidth;
+
+					//change the aspect ratio to Height : Width
+					double lAspectRatio = 1 / cam.aspect_ratio;
+					//revise the aspect ratio and aperture ratio
+					KFbxCamera::ECameraGateFit lCameraGateFit = lCamera->GateFit.Get();
+					switch( lCameraGateFit)
+					{
+
+					case KFbxCamera::eFILL_FIT:
+						if( lApertureRatio > lAspectRatio)  // the same as eHORIZONTAL_FIT
+						{
+							lFilmHeight = lFilmWidth * lAspectRatio;
+							lCamera->SetApertureHeight( lFilmHeight);
+							lApertureRatio = lFilmHeight / lFilmWidth;
+						}
+						else if( lApertureRatio < lAspectRatio) //the same as eVERTICAL_FIT
+						{
+							lFilmWidth = lFilmHeight / lAspectRatio;
+							lCamera->SetApertureWidth( lFilmWidth);
+							lApertureRatio = lFilmHeight / lFilmWidth;
+						}
+						break;
+					case KFbxCamera::eVERTICAL_FIT:
+						lFilmWidth = lFilmHeight / lAspectRatio;
+						lCamera->SetApertureWidth( lFilmWidth);
+						lApertureRatio = lFilmHeight / lFilmWidth;
+						break;
+					case KFbxCamera::eHORIZONTAL_FIT:
+						lFilmHeight = lFilmWidth * lAspectRatio;
+						lCamera->SetApertureHeight( lFilmHeight);
+						lApertureRatio = lFilmHeight / lFilmWidth;
+						break;
+					case KFbxCamera::eSTRETCH_FIT:
+						lAspectRatio = lApertureRatio;
+						break;
+					case KFbxCamera::eOVERSCAN_FIT:
+						if( lFilmWidth > lFilmHeight)
+						{
+							lFilmHeight = lFilmWidth * lAspectRatio;
+						}
+						else
+						{
+							lFilmWidth = lFilmHeight / lAspectRatio;
+						}
+						lApertureRatio = lFilmHeight / lFilmWidth;
+						break;
+					case KFbxCamera::eNO_FIT:
+					default:
+						break;
+					}
+					//change the aspect ratio to Width : Height
+					lAspectRatio = 1 / lAspectRatio;
+
+					//dealing with fov
+					double lFieldOfViewX = 0.0;
+					double lFieldOfViewY=0.0;
+
+					#define K_PI_180		        .017453292519943295769236907684886127134428718885417
+					#define K_180_PI		        57.295779513082320876798154814105170332405472466565
+					#define HFOV2VFOV(h, ar) (2.0 * atan((ar) * tan( (h * K_PI_180) * 0.5)) * K_180_PI) //ar : aspectY / aspectX
+					#define VFOV2HFOV(v, ar) (2.0 * atan((ar) * tan( (v * K_PI_180) * 0.5)) * K_180_PI) //ar : aspectX / aspectY
+					if ( lCamera->GetApertureMode() == KFbxCamera::eVERTICAL)
+					{
+						lFieldOfViewY = lCamera->FieldOfView.Get();
+						lFieldOfViewX = VFOV2HFOV( lFieldOfViewY, 1 / lApertureRatio);
+					}
+					else if (lCamera->GetApertureMode() == KFbxCamera::eHORIZONTAL)
+					{
+						lFieldOfViewX = lCamera->FieldOfView.Get(); //get HFOV
+						lFieldOfViewY = HFOV2VFOV( lFieldOfViewX, lApertureRatio);
+					}
+					else if (lCamera->GetApertureMode() == KFbxCamera::eFOCAL_LENGTH)
+					{
+						lFieldOfViewX = lCamera->ComputeFieldOfView(lCamera->FocalLength.Get());    //get HFOV
+						lFieldOfViewY = HFOV2VFOV( lFieldOfViewX, lApertureRatio);
+					}
+					else if (lCamera->GetApertureMode() == KFbxCamera::eHORIZONTAL_AND_VERTICAL) {
+						lFieldOfViewX = lCamera->FieldOfViewX.Get();
+						lFieldOfViewY = lCamera->FieldOfViewY.Get();
+					}
+					cam.fov = lFieldOfViewY;
+				}
+				cameras->push_back(cam);
+			}
+
 			auto & node_world_transform = scene->GetEvaluator()->GetNodeGlobalTransform(mesh_node);
 			auto asset_model = mesh_to_asset_model(mesh, node_world_transform);
 			

@@ -28,6 +28,14 @@ float2 ndc_to_vp(float2 n1, float2 n2, float2 vp, float2 n)
 	return v;
 }
 */
+float3 vp_to_ndc(float2 vp_size, float2 vp, float z)
+{
+	float3 v;
+	v.x = (vp.x / vp_size.x - 0.5) * 2;
+	v.y = ((1 - vp.y / vp_size.y) - 0.5) * 2;
+	v.z = z;
+	return v;
+}
 float2 ndc_to_vp(float2 vp_size, float3 ndc)
 {
 	float2 v;

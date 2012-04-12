@@ -96,11 +96,11 @@ PS2GPU ps( VS2PS IN )
 		}
 		else
 		{
-			color += 0;
+			color = 0;//RED.xyz;
 		}
 		
 	}
 	color /= MSAA_COUNT;
-	OUT.color = color.xyzz; 
+	OUT.color = color.xyzz;
 	return OUT;
 }

@@ -72,7 +72,7 @@ namespace fx
 		gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
 	}
 
-	void make_fx_env(Gfx* gfx, out FXEnvironment* env)
+	void make_fx_env(Gfx* gfx, FXEnvironment* env)
 	{
 		zero(env);
 		make_resolve_ctx(gfx, &env->resolve_ctx);
@@ -81,7 +81,7 @@ namespace fx
 		make_additive_blend_ctx(gfx, &env->additive_blend_ctx);
 		make_luminance_ctx(gfx, &env->luminance_ctx);
 	}
-	void make_gpu_env(Gfx* gfx, out GpuEnvironment* env)
+	void make_gpu_env(Gfx* gfx, GpuEnvironment* env)
 	{
 		zero(env);
 
@@ -146,7 +146,7 @@ namespace fx
 		}
 	}
 
-	void make_gen_gbuffer_ctx(Gfx* gfx, out GenGBufferContext* ctx)
+	void make_gen_gbuffer_ctx(Gfx* gfx, GenGBufferContext* ctx)
 	{
 		assert(false); //create a destroy() pair
 		gfx->create_shaders_and_il(L"shaders/standard_animated.hlsl", 
@@ -160,15 +160,15 @@ namespace fx
 	}
 	void gen_gbuffer(Gfx* gfx, 
 		const GenGBufferContext* fx_ctx, 
-		out Target* albedo, 
-		out Target* normal,
-		out Depth* depth)
+		Target* albedo, 
+		Target* normal,
+		Depth* depth)
 	{
 		//manually gen the gbuffer for now
 		assert(false);
 	}
 
-	void make_shade_gbuffer_ctx(Gfx* gfx, out FXContext* ctx)
+	void make_shade_gbuffer_ctx(Gfx* gfx, FXContext* ctx)
 	{
 		gfx->create_shaders_and_il(L"shaders/shade_gbuffer.hlsl", 
 			&ctx->vs, 
@@ -182,11 +182,11 @@ namespace fx
 	void shade_gbuffer(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* albedo, 
-		in Resource* normal,
-		in Resource* depth,
-		in d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
-		out Target* target)
+		Resource* albedo, 
+		Resource* normal,
+		Resource* depth,
+		d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
+		Target* target)
 	{
 		gfx->sync_to_cbuffer(fx_ctx->uniforms, *gbuffer_debug_cb);
 
@@ -211,14 +211,14 @@ namespace fx
 
 	}
 
-	void make_bloom_ctx(Gfx* gfx, out FXContext* ctx) { }
+	void make_bloom_ctx(Gfx* gfx, FXContext* ctx) { }
 	void bloom(Gfx* gfx, 
 		const GpuEnvironment* env,
 		const FXContext* fx_ctx,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 
-	void make_blur_ctx(Gfx* gfx, out BlurContext* ctx)
+	void make_blur_ctx(Gfx* gfx, BlurContext* ctx)
 	{		
 		auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_5_0");	
 		gfx->device->CreateVertexShader(
@@ -243,8 +243,8 @@ namespace fx
 		const BlurContext* fx_ctx,
 		BlurDirection direction,
 		float sigma,
-		in Resource* input,
-		out Target* output)
+		Resource* input,
+		Target* output)
 	{
 		Target* targets[TARGETS_COUNT] = {};
 		Resource* resources[RESOURCES_COUNT] = {};
@@ -280,7 +280,7 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
-	void make_lum_highpass_ctx(Gfx* gfx, out FXContext* ctx)
+	void make_lum_highpass_ctx(Gfx* gfx, FXContext* ctx)
 	{		
 		gfx->create_shaders_and_il(L"shaders/lum_highpass.hlsl", 
 			&ctx->vs, &ctx->ps);
@@ -290,8 +290,8 @@ namespace fx
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
 		float min_lum,
-		in Resource* input,
-		out Target* output)
+		Resource* input,
+		Target* output)
 	{
 		Target* targets[TARGETS_COUNT] = {output};
 		Resource* resources[RESOURCES_COUNT] = {input};
@@ -321,7 +321,7 @@ namespace fx
 		gfx->sync_to_cbuffer(gpu_env->fsquad_uniforms, *fsquad_cb_data);
 	}
 	
-	void make_additive_blend_ctx(Gfx* gfx, out FXContext* ctx)
+	void make_additive_blend_ctx(Gfx* gfx, FXContext* ctx)
 	{		
 		gfx->create_shaders_and_il(L"shaders/additive_blend.hlsl", 
 			&ctx->vs, &ctx->ps);
@@ -329,9 +329,9 @@ namespace fx
 	void additive_blend(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* a,
-		in Resource* b,
-		out Target* target)
+		Resource* a,
+		Resource* b,
+		Target* target)
 	{
 		Target* targets[TARGETS_COUNT] = {target};
 		Resource* resources[RESOURCES_COUNT] = {a, b};
@@ -349,7 +349,7 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 	
-	void make_resolve_ctx(Gfx* gfx, out FXContext* ctx)
+	void make_resolve_ctx(Gfx* gfx, FXContext* ctx)
 	{
 		gfx->create_shaders_and_il(L"shaders/resolve.hlsl", 
 			&ctx->vs, &ctx->ps);
@@ -357,8 +357,8 @@ namespace fx
 	void resolve(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* source,
-		out Target* target)
+		Resource* source,
+		Target* target)
 	{		
 		Target* targets[TARGETS_COUNT] = {target};
 		Resource* resources[RESOURCES_COUNT] = {source};
@@ -379,8 +379,8 @@ namespace fx
 	void luminance( Gfx* gfx, 
 		const GpuEnvironment* gpu_env, 
 		const FXContext* fx_ctx, 
-		in Resource* input, 
-		out Target* output )
+		Resource* input, 
+		Target* output )
 	{
 		Target* targets[TARGETS_COUNT] = {output};
 		Resource* resources[RESOURCES_COUNT] = {input};
@@ -398,19 +398,19 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
-	void make_luminance_ctx( Gfx* gfx, out FXContext* ctx )
+	void make_luminance_ctx( Gfx* gfx, FXContext* ctx )
 	{
 		gfx->create_shaders_and_il(L"shaders/luminance.hlsl", 
 			&ctx->vs, &ctx->ps);
 	}
 
-	void make_tonemap_ctx( Gfx* gfx, out FXContext* ctx )
+	void make_tonemap_ctx( Gfx* gfx, FXContext* ctx )
 	{
 		gfx->create_shaders_and_il(L"shaders/tonemap.hlsl", 
 			&ctx->vs, &ctx->ps);
 	}
 
-	void tonemap( Gfx* gfx, const GpuEnvironment* gpu_env, const FXContext* fx_ctx, in Resource* input, out Target* output )
+	void tonemap( Gfx* gfx, const GpuEnvironment* gpu_env, const FXContext* fx_ctx, Resource* input, Target* output )
 	{
 		Target* targets[TARGETS_COUNT] = {output};
 		Resource* resources[RESOURCES_COUNT] = {input};
@@ -428,7 +428,7 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
-	void make_ssr_ctx( Gfx* gfx, out FXContext* ctx )
+	void make_ssr_ctx( Gfx* gfx, FXContext* ctx )
 	{
 		gfx->create_shaders_and_il(L"shaders/ssr.hlsl", 
 			&ctx->vs, &ctx->ps);
@@ -439,11 +439,11 @@ namespace fx
 		Gfx* gfx, 
 		const GpuEnvironment* gpu_env, 
 		const FXContext* fx_ctx, 
-		in Resource* normal, 
-		in Resource* color, 
-		in Resource* depth, 
-		in Resource* debug, 
-		out Target* output )
+		Resource* normal, 
+		Resource* color, 
+		Resource* depth, 
+		Resource* debug, 
+		Target* output )
 	{
 		Target* targets[TARGETS_COUNT] = {output};
 		Resource* resources[RESOURCES_COUNT] = {normal, color, depth, debug};

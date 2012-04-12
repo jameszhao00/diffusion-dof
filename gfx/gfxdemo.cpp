@@ -7,10 +7,6 @@ using namespace std;
 
 //using namespace DirectX;
 
-#define in
-#define inout
-#define out
-
 void resize(ID3D11Texture2D** texture,
 			ID3D11Device* device,
 			int w, int h)
@@ -149,19 +145,60 @@ void TW_CALL CopyCDStringToClient(char **destPtr, const char *src)
 		strncpy(*destPtr, src, srcLen);
 	(*destPtr)[srcLen] = '\0'; // null-terminated string
 }
+
+#include <iostream>
+#include <fstream>
+using namespace std;
 void TW_CALL save_img_callback(void *ptr)
 { 
 	GfxDemo* demo = (GfxDemo*)ptr;
-	ID3D11Resource* backbuffer_tex;
-	demo->d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
 
 	std::string s(demo->save_name);
 	std::wstring ws;
 	ws.assign(s.begin(), s.end());
-	ws = L"comparison/" + ws + L".bmp";
+	{
+		ID3D11Resource* backbuffer_tex;
+		demo->d3d.back_buffer_rtv->GetResource(&backbuffer_tex);
+		D3DX11SaveTextureToFile(demo->d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, (L"comparison/" + ws + L".bmp").c_str());
+		backbuffer_tex->Release();
+	}
+	{
+		//depth
+		auto path = (L"comparison/" + ws + L"_depth.depth");
+		ID3D11Texture2D* depth_tex;
+		demo->d3d.depth_srv->GetResource((ID3D11Resource**)&depth_tex);
 
-	D3DX11SaveTextureToFile(demo->d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, ws.c_str());
-	backbuffer_tex->Release();
+
+		D3D11_TEXTURE2D_DESC tex2d_desc;
+		depth_tex->GetDesc(&tex2d_desc);
+		ID3D11Texture2D* temp;
+		tex2d_desc.BindFlags = 0;
+		tex2d_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ ;
+		tex2d_desc.Usage = D3D11_USAGE_STAGING;
+		demo->d3d.device->CreateTexture2D(&tex2d_desc, nullptr, &temp);
+		demo->d3d.immediate_ctx->CopyResource(temp, depth_tex);
+
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		demo->d3d.immediate_ctx->Map(temp, 0, D3D11_MAP_READ, 0, &mapped);
+
+		ofstream output(path, std::ios::out | ios::binary | ios::trunc);
+		for(int r = 0; r < tex2d_desc.Height; r++)
+		{
+			for(int c = 0; c < tex2d_desc.Width; c++)
+			{
+				float val = *(float*)((char*)mapped.pData + r * mapped.RowPitch + c * sizeof(float));
+				
+				output << val  << ",";				
+			}
+			output << endl;
+		}
+		assert(output.bad() == false);
+		output.close();
+		demo->d3d.immediate_ctx->Unmap(temp, 0);
+
+		temp->Release();
+		depth_tex->Release();
+	}
 }
 void GfxDemo::init(HINSTANCE instance)
 {
@@ -188,7 +225,11 @@ void GfxDemo::init(HINSTANCE instance)
 
 	//obj_ori[0] = 0; obj_ori[1] = .93; obj_ori[2] = .37; obj_ori[3] = -0.07;
 	//obj_ori[0] = 0; obj_ori[1] = 0; obj_ori[2] = 0; obj_ori[3] = 0;
+
 	XMStoreFloat4((XMFLOAT4*)obj_ori, XMQuaternionIdentity());
+	obj_ori[0] = 0.17; obj_ori[1] = 0.01; obj_ori[2] = -0; obj_ori[3] = .99;
+	cam_dist = 0.57;
+	
 	light_dir_ws[0] = 0;
 	light_dir_ws[1] = 1;
 	light_dir_ws[2] = 0;
@@ -197,7 +238,10 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Image Name", TW_TYPE_CDSTRING, &save_name, "");
 	TwAddButton(bar, "Save Image", save_img_callback, this, "");
 	save_name = strdup("");
+	
 
+	camera_i = 0;
+	TwAddVarRW(bar, "Camera", TW_TYPE_INT32, &camera_i, "min=0");
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "step=0.001");
 	TwAddVarRW(bar, "Anim", TW_TYPE_BOOLCPP, &do_anim, "");
@@ -207,12 +251,14 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");
+	TwAddVarRW(bar, "Viz X", TW_TYPE_INT32, &vx, "step=1");
+	TwAddVarRW(bar, "Viz Y", TW_TYPE_INT32, &vy, "step=1");
+	vx = 300; vy = 300;
 	
 	TwAddVarRW(bar, "Use Fresnel", TW_TYPE_BOOLCPP, &use_fresnel, "");
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
 
 	
-	cam_dist = 1;
 	
 
 	D3D11_DEPTH_STENCIL_DESC ds_desc;
@@ -229,7 +275,7 @@ void GfxDemo::init(HINSTANCE instance)
 float dt = 0;
 int debug_render_frame = 0;
 template<typename T>
-void clear_views(inout T** views, int num_views)
+void clear_views(T** views, int num_views)
 {
 	for(int i = 0; i < num_views; i++) views[i] = nullptr;
 }
@@ -317,23 +363,41 @@ void GfxDemo::frame()
 		v = XMMatrixLookAtLH(XMVectorSet(0, 50 * cam_dist, -90 * cam_dist, 1), XMVectorSet(0, 0, 0, 1), XMVectorSet(0, 1, 0, 0));
 	}
 
+	auto current_cam = cameras[camera_i % cameras.size()];
 
-	
-	//0 = f / (f - n)
-	//1 = (-f * n) / (f - n)
-	//near, far
+	////////////////////CAMERA
+	if(0) {
+	v=   XMMatrixLookAtLH(
+		XMVectorSet(current_cam.eye.x, current_cam.eye.y, current_cam.eye.z, 1), 
+		XMVectorSet(current_cam.focus.x, current_cam.focus.y, current_cam.focus.z, 1), 
+		XMVectorSet(current_cam.up.x, current_cam.up.y, current_cam.up.z, 0)
+		); }
+	///////////////////////
+
 	float n = 1; float f = 300; 
 
 	if(invert_depth)
 	{
 		n = 300; f = 1; 
 	}
+	float fov = XM_PI / 4.0f;
+	float ar = window_size.cx / (float)window_size.cy;
+	////////////////////CAMERA
+	if(0)
+	{
+		n = current_cam.f; f = current_cam.n;
+		ar = current_cam.aspect_ratio; fov = current_cam.fov;
+	}
+	///////////////////////
+	auto p = XMMatrixPerspectiveFovLH(fov, ar, n, f);
+	//0 = f / (f - n)
+	//1 = (-f * n) / (f - n)
+	//near, far
 	fsquad_cb_data.proj_constants[0] = f / (f - n);
 	fsquad_cb_data.proj_constants[1] = (-f * n) / (f - n);
-	float fov = XM_PI / 4.0f;
 	fsquad_cb_data.debug_vars[0] = cos(fov * 0.5 )/sin(fov * 0.5 );
-	auto p = XMMatrixPerspectiveFovLH(fov, window_size.cx / (float)window_size.cy, n, f);//1, 1000);
-	//auto p = XMMatrixPerspectiveLH(100, 100, n, f);//1, 1000);
+	fsquad_cb_data.debug_vars[1] = vx;
+	fsquad_cb_data.debug_vars[2] = vy;
 	
 	auto wv = XMMatrixMultiply(w, v);
 	auto wvp = XMMatrixMultiply(wv, p);
@@ -467,13 +531,13 @@ void GfxDemo::load_models()
 {
 	if(1)
 	{		
-		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref.fbx");
+		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref2.fbx", &cameras);
 		//model = asset::fbx::load_animated_fbx_model("assets/source/cb.fbx");
 	
 	
 		list<const Model*> models;
 		models.push_back(model.get());
-		package::bake_package(L"assets/ssr.package", &models);
+		package::bake_package(L"assets/ssr2.package", &models);
 	}
 	
 	cam_focus[0] = 0;//model->center[0];
@@ -481,7 +545,7 @@ void GfxDemo::load_models()
 	cam_focus[1] = 40;// model->center[1];
 	cam_focus[2] = 0;//model->center[2];
 
-	package::load_package(L"assets/ssr.package", &package);
+	package::load_package(L"assets/ssr2.package", &package);
 
 	d3d.create_draw_op(
 		package.meshes[0].verticies, 

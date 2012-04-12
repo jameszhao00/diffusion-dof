@@ -6,6 +6,7 @@
 #include "package.h"
 #include <vector>
 #include "fx.h"
+#include "fbx.h"
 
 using namespace gfx;
 using namespace std;
@@ -73,11 +74,14 @@ struct GfxDemo
 
 	float obj_ori[4];
 	float cam_dist;
-
+	int vx; int vy;
 	fx::GpuEnvironment gpu_env;
 	fx::FXEnvironment fx_env;
 	fx::FXContext shade_gbuffer_ctx;
 	fx::FXContext tonemap_ctx;
 	fx::FXContext ssr_ctx;
 	char* save_name;
+
+	vector<asset::fbx::Camera> cameras;
+	int camera_i;
 };

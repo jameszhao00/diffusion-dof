@@ -2,9 +2,6 @@
 #include <d3d11.h>
 #include "d3d.h"
 #include "gfx.h"
-#define in
-#define inout
-#define out
 template<typename T>
 void zero(T* ptr)
 {
@@ -69,80 +66,80 @@ namespace fx
 	};
 
 	
-	void make_fx_env(Gfx* gfx, out FXEnvironment* env);
-	void make_gpu_env(Gfx* gfx, out GpuEnvironment* env);
+	void make_fx_env(Gfx* gfx, FXEnvironment* env);
+	void make_gpu_env(Gfx* gfx, GpuEnvironment* env);
 
-	void make_ssr_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_tonemap_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_luminance_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_resolve_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_additive_blend_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_gen_gbuffer_ctx(Gfx* gfx, out GenGBufferContext* ctx);
-	void make_shade_gbuffer_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_bloom_ctx(Gfx* gfx, out FXContext* ctx);
-	void make_blur_ctx(Gfx* gfx, out BlurContext* ctx);
-	void make_lum_highpass_ctx(Gfx* gfx, out FXContext* ctx);
+	void make_ssr_ctx(Gfx* gfx, FXContext* ctx);
+	void make_tonemap_ctx(Gfx* gfx, FXContext* ctx);
+	void make_luminance_ctx(Gfx* gfx, FXContext* ctx);
+	void make_resolve_ctx(Gfx* gfx, FXContext* ctx);
+	void make_additive_blend_ctx(Gfx* gfx, FXContext* ctx);
+	void make_gen_gbuffer_ctx(Gfx* gfx, GenGBufferContext* ctx);
+	void make_shade_gbuffer_ctx(Gfx* gfx, FXContext* ctx);
+	void make_bloom_ctx(Gfx* gfx, FXContext* ctx);
+	void make_blur_ctx(Gfx* gfx, BlurContext* ctx);
+	void make_lum_highpass_ctx(Gfx* gfx, FXContext* ctx);
 	
 	void resolve(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* source,
-		out Target* target);
+		Resource* source,
+		Target* target);
 	void additive_blend(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* a,
-		in Resource* b,
-		out Target* target);
+		Resource* a,
+		Resource* b,
+		Target* target);
 	void gen_gbuffer(Gfx* gfx, 
 		const GenGBufferContext* fx_ctx, 
-		out Target* albedo, 
-		out Target* normal,
-		out Depth* depth);
+		Target* albedo, 
+		Target* normal,
+		Depth* depth);
 	void shade_gbuffer(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* albedo, 
-		in Resource* normal,
-		in Resource* depth,
-		in d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
-		out Target* target);
+		Resource* albedo, 
+		Resource* normal,
+		Resource* depth,
+		d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
+		Target* target);
 	void bloom(Gfx* gfx, 
 		const GpuEnvironment* env,
 		const FXContext* fx_ctx,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 	void blur(Gfx* gfx, 
 		const GpuEnvironment* env,
 		const BlurContext* fx_ctx,
 		BlurDirection direction,
 		float sigma,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 	void lum_highpass(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
 		float min_lum,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 	void luminance(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 	void tonemap(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* input,
-		out Target* output);
+		Resource* input,
+		Target* output);
 	void ssr(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
 		const FXContext* fx_ctx,
-		in Resource* normal,
-		in Resource* color,
-		in Resource* depth,
-		in Resource* debug,
-		out Target* output);
+		Resource* normal,
+		Resource* color,
+		Resource* depth,
+		Resource* debug,
+		Target* output);
 	void update_gpu_env(Gfx* gfx,		
 		const d3d::cbuffers::FSQuadCb* fsquad_cb_data,
 		GpuEnvironment* gpu_env);
