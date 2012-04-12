@@ -70,3 +70,12 @@ float luminance(float3 source)
 {
 	return 0.2126 * source.r + 0.7152 * source.g + 0.0722 * source.b;
 }
+float in_vp_bounds(float2 pos, float2 vp_size)
+{
+	return (pos.x > 0) && (pos.y > 0) && (pos.x < vp_size.x) && (pos.y < vp_size.y);
+}
+//is d1 closer than d2?
+float closer_ndc(float d1, float d2)
+{
+	return d1 > d2; //we use inverted depth
+}

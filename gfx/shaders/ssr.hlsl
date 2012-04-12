@@ -14,7 +14,7 @@ Texture2D<float> g_depth : register(t[2]);
 Texture2D<float4> g_debug: register(t[3]);
 #endif
 #define z_error_bounds 25
-#define base_increment 80
+#define base_increment 40
 cbuffer FSQuadCB
 {	
 	float4x4 g_inv_p;
@@ -37,6 +37,13 @@ VS2PS vs(float3 position : POSITION)
 	return OUT;
 }
 
+float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, float3 r_vs)
+{
+	//calculate the desired t. look at math.nb
+	return
+			(-half_cot_fov * vp_size.y * pos_vs.y + (-2 * vpy + vp_size.y) * pos_vs.z) / 
+			(2 * vpy * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);	
+}
 float4 debug(VS2PS IN)
 {
 	uint2 vp_size;
@@ -53,6 +60,8 @@ float4 debug(VS2PS IN)
 
 	IN.viewspace_ray = normalize(vs.xyz);
 	///////////////////////
+
+	
 	float ndc_depth = g_depth.Load(pix_coord, 0);
 	float3 pos_vs = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
 	//if(ndc_depth == DEPTH_MAX) return 0;
@@ -66,108 +75,96 @@ float4 debug(VS2PS IN)
 	//pos_vs = (float3(2, 2, 20)); //TEST!!
 	float2 r_ss = normalize(vs_to_vp(pos_vs + r_vs, vp_size, g_proj) - pix_coord.xy);
 
-	//s_* = sample_
-
 	//buffer by 1 r_ss
-	float s_y_ss = pix_coord.y;
-	float s_x_ss = pix_coord.x;
+	float2 s_pos_ss = pix_coord.xy;
+	if(length(s_pos_ss - IN.position.xy) < 5)
+	{
+		return GREEN;
+	}
 	float half_cot_fov = g_debug_vars[0];
 
 	
-	float last_test_z_vs_err = 1000; //actual - expected ... z error in VS 
-	float3 last_test_t;
-
 	//idea: increment in small steps the further away the ray is
+	float4 result = 0;
 
+	//uv of the reflection point
+	float2 target_vp = -1;
+	float min_t = 0;
+	float2 min_pos_vp = s_pos_ss;
+	float max_t = -1;
+	float2 max_pos_vp = -1;
+	bool detailed_search = false;
 	for(int i = 0; i < max(vp_size.x, vp_size.y) / base_increment; i++)
 	{
-		//we can't increment this directly...
-		//we have to scale it so that an increment will cross approximately 1 pixel
-		float increment = base_increment;//(base_increment + i) * clamp(abs(last_test_z_vs_err) / 10, .7, 1.5);
-		
-		s_y_ss += increment * r_ss.y;
-		s_x_ss += increment * r_ss.x; 
-		if(
-			(s_y_ss < 0) ||
-			(s_y_ss > (int)vp_size.x) ||
-			(s_y_ss < 0) ||
-			(s_y_ss > (int)vp_size.y))
-		{
-			break;
-		}
+		s_pos_ss += base_increment * (r_ss);
+		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
 
-
-		//s_y_ss = 5; //TEST!!
-		//calculate the desired t. look at math.nb
-		float t = 
-			(-half_cot_fov * vp_size.y * pos_vs.y + (-2 * s_y_ss + vp_size.y) * pos_vs.z) / 
-			(2 * s_y_ss * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);
-		
-		//return abs(t); //TEST
-
-		//return t;
+		float t = vpy_to_t(s_pos_ss.y, half_cot_fov, vp_size, pos_vs, r_vs);
+		max_t = t;
+		max_pos_vp = s_pos_ss;
 		float s_desired_z_ndc = 
 			(g_proj_constants[1] + g_proj_constants[0]*(r_vs.z * t + pos_vs.z)) / 
 			(r_vs.z * t + pos_vs.z);
 
-		//return s_desired_z_ndc;
-		float2 s_pos_uv = vp_to_uv(vp_size, float2(s_x_ss, s_y_ss));
-
-		//we can't bilinearly sample Z
-		//float s_actual_z_ndc = g_depth.SampleGrad (g_linear, s_pos_uv, 0, 0);
-		float s_actual_z_ndc = g_depth.Load(int3(s_x_ss, s_y_ss, 0));
-		//if we Load ndc Z, we can't interpolate based on this
-
-		float s_actual_z_vs = unproject_z(s_actual_z_ndc, g_proj_constants.xy);
-		float s_desired_z_vs = unproject_z(s_desired_z_ndc, g_proj_constants.xy);
-		float s_z_error_vs = s_actual_z_vs - s_desired_z_vs;
+		float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
 		
-		//(sign(s_z_error_vs) != sign(last_test_z_vs_err))
-		//the above doesnt work because it also succeeds when the ray poke out of something
-
-		if(
-			abs(s_z_error_vs) < z_error_bounds && //current error is acceptable
-			abs(last_test_z_vs_err < z_error_bounds) && //last error is acceptable
-			(last_test_z_vs_err > 0) &&
-			(s_z_error_vs < 0)
-			
-			)
+		if(closer_ndc(s_actual_z_ndc, s_desired_z_ndc))
+		{			
+			detailed_search = true;
+			break;
+		}
+		if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.00005)
 		{
-			float err_ratio = abs(last_test_z_vs_err) / (abs(s_z_error_vs) + abs(last_test_z_vs_err));
+			target_vp = s_pos_ss;
+		}
+		min_t = max_t;
+		min_pos_vp = max_pos_vp;
+	}
+	if(detailed_search)
+	{
+		s_pos_ss = min_pos_vp;
+		for(int i = 0; i < 500; i++)
+		{
+			s_pos_ss += r_ss;
+			float t = vpy_to_t(s_pos_ss.yy, half_cot_fov, vp_size, pos_vs, r_vs);
+			if(t > max_t) break; 
+			float s_desired_z_ndc = 
+				(g_proj_constants[1] + g_proj_constants[0]*(r_vs.z * t + pos_vs.z)) / 
+				(r_vs.z * t + pos_vs.z);
+				
+			float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
 			
-			float3 last_test_vs_pos = pos_vs + last_test_t * r_vs;
-			float3 current_test_vs_pos = pos_vs + t * r_vs;
+		/****************************/
+		float error = (s_actual_z_ndc - s_desired_z_ndc) * 10;
+		if(length(s_pos_ss - IN.position.xy) < 1)
+		{
+			return RED * (error > 0) + BLUE * (error < 0);
+			//return RED;
+		}		
+		/****************************/
 
-			float3 interpolated_sample_pos_vs = lerp(last_test_vs_pos, current_test_vs_pos, err_ratio);				
-
-			float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
-
-			if(length(interpolated_sample_pos_vp - IN.position.xy) < 5)
+			
+			if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.00005)
 			{
-				return GREEN;
+				/****************************/
+				if(length(s_pos_ss - IN.position.xy) < 5)
+				{
+					return GREEN;
+				}
+				/****************************/
+				target_vp = s_pos_ss;
+				break;
 			}
-								
-			float2 interpolated_sample_pos_uv = vp_to_uv(vp_size, interpolated_sample_pos_vp);			
-			
-			//return 0;
 		}
-		
-		if(length(float2(s_x_ss, s_y_ss) - IN.position.xy) < 5)
-		{
-			return RED * s_z_error_vs + BLUE * -s_z_error_vs;
-		}
-		
-		last_test_t = t;
-		last_test_z_vs_err = s_z_error_vs;
 	}
 	return 0;
 }
-
 float4 ps(VS2PS IN) : SV_TARGET
 {
 	uint2 vp_size;
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 	float3 pix_coord = float3(IN.position.xy, 0);
+
 	float ndc_depth = g_depth.Load(pix_coord, 0);
 	float3 pos_vs = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
 	//if(ndc_depth == DEPTH_MAX) return 0;
@@ -181,94 +178,73 @@ float4 ps(VS2PS IN) : SV_TARGET
 	//pos_vs = (float3(2, 2, 20)); //TEST!!
 	float2 r_ss = normalize(vs_to_vp(pos_vs + r_vs, vp_size, g_proj) - pix_coord.xy);
 
-	//s_* = sample_
-
 	//buffer by 1 r_ss
-	float s_y_ss = pix_coord.y;
-	float s_x_ss = pix_coord.x;
+	float2 s_pos_ss = pix_coord.xy;
 	float half_cot_fov = g_debug_vars[0];
 
 	
-	float last_test_z_vs_err = 1000; //actual - expected ... z error in VS 
-	float3 last_test_t;
-
 	//idea: increment in small steps the further away the ray is
 	float4 result = 0;
+
+	//uv of the reflection point
+	float2 target_vp = -1;
+	float min_t = 0;
+	float2 min_pos_vp = s_pos_ss;
+	float max_t = -1;
+	float2 max_pos_vp = -1;
+	bool detailed_search = false;
 	for(int i = 0; i < max(vp_size.x, vp_size.y) / base_increment; i++)
 	{
-		//we can't increment this directly...
-		//we have to scale it so that an increment will cross approximately 1 pixel
-		float increment = base_increment;//(base_increment + i) * clamp(abs(last_test_z_vs_err) / 10, .7, 1.5);
-		
-		s_y_ss += increment * r_ss.y;
-		s_x_ss += increment * r_ss.x; 
-		if(
-			(s_y_ss < 0) ||
-			(s_y_ss > (int)vp_size.x) ||
-			(s_y_ss < 0) ||
-			(s_y_ss > (int)vp_size.y))
-		{
-			break;
-		}
+		s_pos_ss += base_increment * (r_ss);
+		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
 
-		//s_y_ss = 5; //TEST!!
-		//calculate the desired t. look at math.nb
-		float t = 
-			(-half_cot_fov * vp_size.y * pos_vs.y + (-2 * s_y_ss + vp_size.y) * pos_vs.z) / 
-			(2 * s_y_ss * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);
-		
-		//return abs(t); //TEST
-
-		//return t;
+		float t = vpy_to_t(s_pos_ss.y, half_cot_fov, vp_size, pos_vs, r_vs);
+		max_t = t;
+		max_pos_vp = s_pos_ss;
 		float s_desired_z_ndc = 
 			(g_proj_constants[1] + g_proj_constants[0]*(r_vs.z * t + pos_vs.z)) / 
 			(r_vs.z * t + pos_vs.z);
 
-		//return s_desired_z_ndc;
-		float2 s_pos_uv = vp_to_uv(vp_size, float2(s_x_ss, s_y_ss));
-
-		//we can't bilinearly sample Z
-		//float s_actual_z_ndc = g_depth.SampleGrad (g_linear, s_pos_uv, 0, 0);
-		float s_actual_z_ndc = g_depth.Load(int3(s_x_ss, s_y_ss, 0));
-		//if we Load ndc Z, we can't interpolate based on this
-
-		float s_actual_z_vs = unproject_z(s_actual_z_ndc, g_proj_constants.xy);
-		float s_desired_z_vs = unproject_z(s_desired_z_ndc, g_proj_constants.xy);
-		float s_z_error_vs = s_actual_z_vs - s_desired_z_vs;
+		float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
 		
-		//(sign(s_z_error_vs) != sign(last_test_z_vs_err))
-		//the above doesnt work because it also succeeds when the ray poke out of something
-
-		if(
-			abs(s_z_error_vs) < z_error_bounds && //current error is acceptable
-			abs(last_test_z_vs_err < z_error_bounds) && //last error is acceptable
-			(last_test_z_vs_err > 0) &&
-			(s_z_error_vs < 0)
-			
-			)
-		{
-			float err_ratio = abs(last_test_z_vs_err) / (abs(s_z_error_vs) + abs(last_test_z_vs_err));
-			
-			float3 last_test_vs_pos = pos_vs + last_test_t * r_vs;
-			float3 current_test_vs_pos = pos_vs + t * r_vs;
-
-			float3 interpolated_sample_pos_vs = lerp(last_test_vs_pos, current_test_vs_pos, err_ratio);				
-
-			float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
-								
-			float2 interpolated_sample_pos_uv = vp_to_uv(vp_size, interpolated_sample_pos_vp);			
-			
-			//return dot(-g_normal.SampleGrad(g_linear, interpolated_sample_pos_uv, 0, 0).xyz, r_vs);
-			//return dot(-g_normal.SampleGrad(g_linear, interpolated_sample_pos_uv, 0, 0).xyz, dir_vs);
-			result = float4(g_albedo.SampleGrad(g_linear, interpolated_sample_pos_uv, 0, 0), 1);
+		if(closer_ndc(s_actual_z_ndc, s_desired_z_ndc))
+		{			
+			detailed_search = true;
+			break;
 		}
-		
-		last_test_t = t;
-		last_test_z_vs_err = s_z_error_vs;
+		if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.000001)
+		{
+			target_vp = s_pos_ss;
+		}
+		min_t = max_t;
+		min_pos_vp = max_pos_vp;
 	}
-	float4 d = debug(IN);
-	if(length(d) > 0) return d;
-	if(length(result) > 0) return result;
+	if(detailed_search)
+	{
+		s_pos_ss = min_pos_vp;
+		for(int i = 0; i < 500; i++)
+		{
+			s_pos_ss += r_ss;
+			float t = vpy_to_t(s_pos_ss.yy, half_cot_fov, vp_size, pos_vs, r_vs);
+			if(t > max_t) break; 
+			float s_desired_z_ndc = 
+				(g_proj_constants[1] + g_proj_constants[0]*(r_vs.z * t + pos_vs.z)) / 
+				(r_vs.z * t + pos_vs.z);
+				
+			float s_actual_z_ndc = g_depth.Load(int3(s_pos_ss, 0));
+			if(abs(s_actual_z_ndc - s_desired_z_ndc) < 0.00005)
+			{
+				target_vp = s_pos_ss;
+				break;
+			}
+		}
+	}
+	//float4 d = debug(IN); if(length(d) > 0) return d;
+	if(target_vp.x != -1 && target_vp.y != -1)
+	{
+		//we found something!		
+		return float4(g_albedo.Load(float3(target_vp, 0), 0).xyz, 1);
+	}
 	return float4(g_albedo.Load(pix_coord, 0).xyz, 1);
 
 }
