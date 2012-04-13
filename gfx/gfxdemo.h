@@ -82,7 +82,7 @@ struct GfxDemo
 	fx::SSRContext ssr_ctx;
 	char* save_name;
 	ID3D11ShaderResourceView* noise;
-
+	float noise_ratio;
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;
 };

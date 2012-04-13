@@ -14,12 +14,13 @@ Texture2D<float3> g_noise: register(t[3]);
 #endif
 #define z_error_bounds 25
 #define base_increment 10
-cbuffer FSQuadCB
+cbuffer FSQuadCB : register(b[0])
 {	
 	float4x4 g_inv_p;
 	float4 g_proj_constants;
 	float4 g_debug_vars; //g_debug_vars[0] should have 0.5 * cot(fov)
 	//debug vars[1]/[2] have x/y pos of the pixel to show rays for
+	//debug vars[3] has noise ratio
 	float4x4 g_proj;
 };
 struct VS2PS
@@ -130,16 +131,12 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 	}
 	return target_vp;
 }
-#define CACHE_POINTS_SEPARATION 10
 float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 {
 	uint2 vp_size;
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 
-	float3 pix_coord = float3(floor(IN.position.xy / CACHE_POINTS_SEPARATION) * CACHE_POINTS_SEPARATION + 0.5, 0);
-	float patch_sample_i = (IN.position.y - pix_coord.y) * CACHE_POINTS_SEPARATION + (IN.position.x - pix_coord.x);
-
-	//if(patch_sample_i == 0) return RED;
+	float3 pix_coord = float3(IN.position.xy, 0);
 
 	float ndc_depth = g_depth.Load(pix_coord, 0);
 	float3 dir_vs = get_vs_ray(vp_size, pix_coord.xy, g_inv_p);
@@ -150,107 +147,168 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 r_vs = reflect(dir_vs, n_vs);
 	float half_cot_fov = g_debug_vars[0];
 	float4 reflection_color = 0;
-	float noise_intensity = 0.05;
+	float noise_intensity = g_debug_vars[3];//0.09;
 	float3 noise = noise_intensity * normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz - 0.5);
 	r_vs = normalize(r_vs + noise);
 	float target_t;
 	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
-	if(target_t != -1) return g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
+	if(target_t != -1)
+	{
+		//return (1 - saturate(target_t / 35)) * RED;
+		return// (1 - saturate(target_t / 50)) * 
+			g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
+	}
 	else return 0;
 }
-float4 combine_samples_ps(VS2PS IN) : SV_TARGET
-{		
-	float2 base_pos_vp = (IN.position.xy - float2(0.5, 0.5)) * CACHE_POINTS_SEPARATION + float2(0.5, 0.5);
-
-	Texture2D samples_tex = g_normal;
-
-	float4 result = 0;
-	for(int i = 0; i < CACHE_POINTS_SEPARATION; i++)
-	{
-		for(int j = 0; j < CACHE_POINTS_SEPARATION; j++)
-		{
-			float2 sample_pos_vp = base_pos_vp + float2(j, i);
-			float4 sample_color = samples_tex.Load(float3(sample_pos_vp, 0));
-
-			result += saturate(sample_color);
-		}
-	}
-	//if(base_pos_vp.x < 500) return RED;
-	//else return BLUE;
-	//return (result / (CACHE_POINTS_SEPARATION * CACHE_POINTS_SEPARATION)) > 1 * RED;
-
-	//return samples_tex.Load(float3(IN.position.xy, 0));
-	return result / (CACHE_POINTS_SEPARATION * CACHE_POINTS_SEPARATION);
-}
+cbuffer weights : register(b[1])
+{
+static float filter_weights[121] = {	
+ 0.001259,
+0.0020758,
+0.0030625,
+0.0040431,
+0.0047764,
+0.0050492,
+0.0047764,
+0.0040431,
+0.0030625,
+0.0020758,
+ 0.001259,
+0.0020758,
+0.0034224,
+0.0050492,
+ 0.006666,
+0.0078749,
+0.0083248,
+0.0078749,
+ 0.006666,
+0.0050492,
+0.0034224,
+0.0020758,
+0.0030625,
+0.0050492,
+0.0074493,
+0.0098346,
+ 0.011618,
+ 0.012282,
+ 0.011618,
+0.0098346,
+0.0074493,
+0.0050492,
+0.0030625,
+0.0040431,
+ 0.006666,
+0.0098346,
+ 0.012984,
+ 0.015338,
+ 0.016214,
+ 0.015338,
+ 0.012984,
+0.0098346,
+ 0.006666,
+0.0040431,
+0.0047764,
+0.0078749,
+ 0.011618,
+ 0.015338,
+  0.01812,
+ 0.019155,
+  0.01812,
+ 0.015338,
+ 0.011618,
+0.0078749,
+0.0047764,
+0.0050492,
+0.0083248,
+ 0.012282,
+ 0.016214,
+ 0.019155,
+ 0.020249,
+ 0.019155,
+ 0.016214,
+ 0.012282,
+0.0083248,
+0.0050492,
+0.0047764,
+0.0078749,
+ 0.011618,
+ 0.015338,
+  0.01812,
+ 0.019155,
+  0.01812,
+ 0.015338,
+ 0.011618,
+0.0078749,
+0.0047764,
+0.0040431,
+ 0.006666,
+0.0098346,
+ 0.012984,
+ 0.015338,
+ 0.016214,
+ 0.015338,
+ 0.012984,
+0.0098346,
+ 0.006666,
+0.0040431,
+0.0030625,
+0.0050492,
+0.0074493,
+0.0098346,
+ 0.011618,
+ 0.012282,
+ 0.011618,
+0.0098346,
+0.0074493,
+0.0050492,
+0.0030625,
+0.0020758,
+0.0034224,
+0.0050492,
+ 0.006666,
+0.0078749,
+0.0083248,
+0.0078749,
+ 0.006666,
+0.0050492,
+0.0034224,
+0.0020758,
+ 0.001259,
+0.0020758,
+0.0030625,
+0.0040431,
+0.0047764,
+0.0050492,
+0.0047764,
+0.0040431,
+0.0030625,
+0.0020758,
+ 0.001259,
+};
+};
 float4 shade_ps(VS2PS IN) : SV_TARGET
 {
+	
+	uint2 vp_size;
+	g_normal.GetDimensions(vp_size.x, vp_size.y);
+	float2 pix_coord = IN.position.xy;
+
+	Texture2D samples_tex = g_normal;
+	float2 uv = vp_to_uv(vp_size, pix_coord);
+	float2 pix_size_uv = vp_pix_uv(vp_size);
+	
+
+	float3 filtered = 0;
+	for(int i = -5; i < 6; i++)
 	{
-		float3 pix_coord = float3(floor(IN.position.xy / CACHE_POINTS_SEPARATION) * CACHE_POINTS_SEPARATION + 0.5, 0);
-		float patch_sample_i = (IN.position.y - pix_coord.y) * CACHE_POINTS_SEPARATION + (IN.position.x - pix_coord.x);
-		//if(patch_sample_i == 0) return RED;
+		for(int j = -5; j < 6; j++)
+		{
+			float3 sample = samples_tex.Sample(g_linear, uv + 3 * float2(i, j) * pix_size_uv);
+			filtered += filter_weights[(i + 5) * 11 + (j + 5)] * saturate(sample);
+			//filtered += saturate(sample);
+		}
 	}
-	uint2 vp_size;
-	g_normal.GetDimensions(vp_size.x, vp_size.y);
-	Texture2D combined_samples_tex = g_normal;
-
-	//return combined_samples_tex.Load(float3(IN.position.xy, 0));
-	//return combined_samples_tex.Load(float3(IN.position.xy / CACHE_POINTS_SEPARATION, 0));
-	
-	float4 base_color = float4(g_albedo.Load(float3(IN.position.xy, 0)).xyz, 1);
-
-	float2 uv = vp_to_uv(vp_size, IN.position.xy / CACHE_POINTS_SEPARATION);
-	return 0.2 * combined_samples_tex.Sample(g_linear, uv) + 0.8 * base_color;
-	return 1;
-}
-float4 ps(VS2PS IN) : SV_TARGET
-{
-	uint2 vp_size;
-	g_normal.GetDimensions(vp_size.x, vp_size.y);
-	float3 pix_coord = float3(IN.position.xy, 0);
-	
-	if(pix_coord.x < 8 && pix_coord.y < 8) return RED;
-	//return g_albedo.SampleBias(g_linear, vp_to_uv(vp_size, IN.position), (IN.position.y / 600) * 5).xyzz;
-	
-	float4 base_color = float4(g_albedo.Load(pix_coord, 0).xyz, 1);
-	//if((pix_coord.x - 0.5)%8 != 0 || (pix_coord.y - 0.5)%8 != 0) return base_color;
-
-	float ndc_depth = g_depth.Load(pix_coord, 0);
-	//cannot normalize viewspace ray!
-	float3 pos_vs = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
-	//if(ndc_depth == DEPTH_MAX) return 0;
-	//be careful about the XYZ when normalizing!!!
-	float3 dir_vs = normalize(IN.viewspace_ray.xyz);
-	//sample view space normal vector
-	float3 n_vs = normalize(g_normal.Load(pix_coord, 0).xyz);
-
-	float3 r_vs = reflect(dir_vs, n_vs);
-	float half_cot_fov = g_debug_vars[0];
-	float4 reflection_color = 0;
-	for(int i = 0; i < 1; i++)
-	{		
-		float3 noise = float3(0.08, 0.08, 0.08) * normalize(g_noise.Load(float3((IN.position.xy * float2(i+1, i+1)) % float2(256, 256), 0)).xyz);
-		noise = 0;
-		float3 sample_r_vs = normalize(r_vs + noise);
-		float target_t;
-		float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, sample_r_vs, half_cot_fov, target_t);
-		
-		/*
-		float3 normal = g_normal.Load(float3(target_vp, 0));
-		float angle_blend = saturate(pow(dot(-normal.xyz, dir_vs), 3));
-		float silhouette_blend = pow(saturate(dot(r_vs, -normal) + 0.57), 18);
-		float blend = angle_blend * silhouette_blend;
-		float distance_blend = 1 - pow(saturate(target_t / 30), 2);
-		*/
-		reflection_color += g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
-	}
-
-	reflection_color /= 1;
-	float blend = .5;
-
-
-	//if(target_vp.x != -1 && target_vp.y != -1)
-	//{	
-		return base_color * (1-blend) + blend * (saturate(reflection_color));
-	//}
-	//return color;
+	//return samples_tex.Sample(g_linear, uv).xyzz +  g_albedo.Load(float3(pix_coord, 0)).xyzz;
+	//return .5 * filtered.xyzz + .5 * g_albedo.Load(float3(pix_coord, 0)).xyzz;
+	return .03 * filtered.xyzz + .97 * g_albedo.Load(float3(pix_coord, 0)).xyzz;
 }

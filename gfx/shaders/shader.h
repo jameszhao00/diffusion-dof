@@ -85,3 +85,7 @@ float closer_ndc(float d1, float d2)
 {
 	return d1 > d2; //we use inverted depth
 }
+float2 vp_pix_uv(float2 vp_size)
+{
+	return vp_to_uv(vp_size, float2(1, 1));
+}

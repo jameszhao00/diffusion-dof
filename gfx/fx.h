@@ -33,9 +33,9 @@ namespace fx
 	struct SSRContext
 	{
 		CComPtr<VertexShader> vs;
-		CComPtr<PixelShader> ps_old;
+		//CComPtr<PixelShader> ps_old;
 		CComPtr<PixelShader> ps_gen_samples;
-		CComPtr<PixelShader> ps_combine_samples;
+		//CComPtr<PixelShader> ps_combine_samples;
 		CComPtr<PixelShader> ps_shade;
 		CComPtr<Uniforms> uniforms;
 	};
