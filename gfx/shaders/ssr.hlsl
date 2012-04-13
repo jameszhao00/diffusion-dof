@@ -130,7 +130,7 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 	}
 	return target_vp;
 }
-#define CACHE_POINTS_SEPARATION 1
+#define CACHE_POINTS_SEPARATION 10
 float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 {
 	uint2 vp_size;
@@ -150,8 +150,8 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 r_vs = reflect(dir_vs, n_vs);
 	float half_cot_fov = g_debug_vars[0];
 	float4 reflection_color = 0;
-	float noise_intensity = 0.005;
-	float3 noise = noise_intensity * normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz);
+	float noise_intensity = 0.05;
+	float3 noise = noise_intensity * normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz - 0.5);
 	r_vs = normalize(r_vs + noise);
 	float target_t;
 	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
@@ -215,7 +215,8 @@ float4 ps(VS2PS IN) : SV_TARGET
 	//if((pix_coord.x - 0.5)%8 != 0 || (pix_coord.y - 0.5)%8 != 0) return base_color;
 
 	float ndc_depth = g_depth.Load(pix_coord, 0);
-	float3 pos_vs = get_vs_pos(normalize(IN.viewspace_ray), ndc_depth, g_proj_constants.xy);
+	//cannot normalize viewspace ray!
+	float3 pos_vs = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
 	//if(ndc_depth == DEPTH_MAX) return 0;
 	//be careful about the XYZ when normalizing!!!
 	float3 dir_vs = normalize(IN.viewspace_ray.xyz);

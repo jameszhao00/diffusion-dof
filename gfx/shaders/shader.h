@@ -38,7 +38,9 @@ float3 vp_to_ndc(float2 vp_size, float2 vp, float z)
 float3 get_vs_ray(float2 vp_size, float2 vp_pos, float4x4 inv_p)
 {
 	float4 hcs = mul(float4(vp_to_ndc(vp_size, vp_pos, DEPTH_MAX), 1), inv_p);
-	return normalize(hcs / hcs.w);
+	float4 vs = normalize(hcs / hcs.w);
+	//vs ray's z HAS TO BE 1
+	return vs / vs.z;
 }
 float2 ndc_to_vp(float2 vp_size, float3 ndc)
 {

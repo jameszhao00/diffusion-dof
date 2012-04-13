@@ -476,7 +476,7 @@ namespace fx
 		Target* scratch1_t,
 		Target* output )
 	{
-		if(1)
+		if(0)
 		{
 			Target* targets[TARGETS_COUNT] = {output};
 			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise};
