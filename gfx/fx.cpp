@@ -428,41 +428,147 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
-	void make_ssr_ctx( Gfx* gfx, FXContext* ctx )
+	void make_ssr_ctx( Gfx* gfx, SSRContext* ctx )
 	{
-		gfx->create_shaders_and_il(L"shaders/ssr.hlsl", 
-			&ctx->vs, &ctx->ps);
+
+		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_5_0");	
+		gfx->device->CreateVertexShader(
+			vs_blob->GetBufferPointer(), 
+			vs_blob->GetBufferSize(), 
+			nullptr, 
+			&ctx->vs);
+		vs_blob->Release();
+
+		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_5_0");
+		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
+			ps_blob->GetBufferSize(), nullptr, &ctx->ps_gen_samples);
+		ps_blob->Release();
+
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "combine_samples_ps", "ps_5_0");
+		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
+			ps_blob->GetBufferSize(), nullptr, &ctx->ps_combine_samples);
+		ps_blob->Release();
+
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_ps", "ps_5_0");
+		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
+			nullptr, &ctx->ps_shade);
+		ps_blob->Release();	
+
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "ps", "ps_5_0");
+		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
+			nullptr, &ctx->ps_old);
+		ps_blob->Release();	
+
 		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::FSQuadCb>();
 	}
 
 	void ssr( 
 		Gfx* gfx, 
 		const GpuEnvironment* gpu_env, 
-		const FXContext* fx_ctx, 
+		const SSRContext* fx_ctx, 
 		Resource* normal, 
 		Resource* color, 
 		Resource* depth, 
-		Resource* debug, 
+		Resource* noise,
+		Resource* scratch0_r,
+		Resource* scratch1_r,
+		Target* scratch0_t,
+		Target* scratch1_t,
 		Target* output )
 	{
-		Target* targets[TARGETS_COUNT] = {output};
-		Resource* resources[RESOURCES_COUNT] = {normal, color, depth, debug};
-		Uniforms* uniforms[UNIFORMS_COUNT] = {gpu_env->fsquad_uniforms};
+		if(1)
+		{
+			Target* targets[TARGETS_COUNT] = {output};
+			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise};
+			Uniforms* uniforms[UNIFORMS_COUNT] = {gpu_env->fsquad_uniforms};
 
-		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
-		gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+			gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+			gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
 
-		gfx->immediate_ctx->VSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
-		gfx->immediate_ctx->PSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+			gfx->immediate_ctx->VSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+			gfx->immediate_ctx->PSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
 
-		gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
-		gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
-			&gpu_env->zero);
+			gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+			gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
+				&gpu_env->zero);
 
-		gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
-		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
+			gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+			gfx->immediate_ctx->PSSetShader(fx_ctx->ps_old, nullptr, 0);
 
-		gfx->immediate_ctx->Draw(6, 0);
+			gfx->immediate_ctx->Draw(6, 0);
+		}
+		else
+		{
+			{
+				//clear rtv/srv bindings
+				Target* targets[TARGETS_COUNT] = {};
+				Resource* resources[RESOURCES_COUNT] = {};
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+			}
+
+			{
+				Target* targets[TARGETS_COUNT] = {scratch0_t};
+				Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise};
+				Uniforms* uniforms[UNIFORMS_COUNT] = {gpu_env->fsquad_uniforms};
+
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+				gfx->immediate_ctx->VSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+				gfx->immediate_ctx->PSSetConstantBuffers(0, UNIFORMS_COUNT, uniforms);
+
+				gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+				gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpu_env->fsquad_vb.p, &gpu_env->fsquad_stride, 
+					&gpu_env->zero);
+
+				gfx->immediate_ctx->VSSetShader(fx_ctx->vs, nullptr, 0);
+				gfx->immediate_ctx->PSSetShader(fx_ctx->ps_gen_samples, nullptr, 0);
+
+				gfx->immediate_ctx->Draw(6, 0);
+			}
+			{
+				//clear rtv/srv bindings
+				Target* targets[TARGETS_COUNT] = {};
+				Resource* resources[RESOURCES_COUNT] = {};
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+			}
+		
+			{
+				Target* targets[TARGETS_COUNT] = {scratch1_t};
+				Resource* resources[RESOURCES_COUNT] = {scratch0_r};
+
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+				gfx->immediate_ctx->PSSetShader(fx_ctx->ps_combine_samples, nullptr, 0);
+
+				gfx->immediate_ctx->Draw(6, 0);
+			}
+			{
+				//clear rtv/srv bindings
+				Target* targets[TARGETS_COUNT] = {};
+				Resource* resources[RESOURCES_COUNT] = {};
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+			}
+
+
+			{
+				Target* targets[TARGETS_COUNT] = {output};
+				Resource* resources[RESOURCES_COUNT] = {scratch1_r, color};
+
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+
+				gfx->immediate_ctx->PSSetShader(fx_ctx->ps_shade, nullptr, 0);
+
+				gfx->immediate_ctx->Draw(6, 0);
+			}
+
+
+		}
 	}
 
 

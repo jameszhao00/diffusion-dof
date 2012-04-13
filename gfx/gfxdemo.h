@@ -79,8 +79,9 @@ struct GfxDemo
 	fx::FXEnvironment fx_env;
 	fx::FXContext shade_gbuffer_ctx;
 	fx::FXContext tonemap_ctx;
-	fx::FXContext ssr_ctx;
+	fx::SSRContext ssr_ctx;
 	char* save_name;
+	ID3D11ShaderResourceView* noise;
 
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;

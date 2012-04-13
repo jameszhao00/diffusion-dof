@@ -75,9 +75,9 @@ PS2GPU ps( VS2PS IN )
 		
 		if(depth != DEPTH_MAX)
 		{	
-			if(0)
+			if(1)
 			{
-				float glossiness = 30;
+				float glossiness = 90;
 				float spec_normalization = (glossiness + 2) / (2 * 3.1415);
 				float brdf_normalization = 3.1415 / 4;
 				float spec = pow(max(dot(normal, vs_h), 0), glossiness);

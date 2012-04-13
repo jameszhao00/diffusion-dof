@@ -17,7 +17,6 @@ float3 get_vs_pos(float3 vs_ray, float ndc_z, float2 proj_constants)
 {
 	return vs_ray * unproject_z(ndc_z, proj_constants);
 }
-
 /*
 //n1/n2 = ndc bounds...
 float2 ndc_to_vp(float2 n1, float2 n2, float2 vp, float2 n)
@@ -35,6 +34,11 @@ float3 vp_to_ndc(float2 vp_size, float2 vp, float z)
 	v.y = ((1 - vp.y / vp_size.y) - 0.5) * 2;
 	v.z = z;
 	return v;
+}
+float3 get_vs_ray(float2 vp_size, float2 vp_pos, float4x4 inv_p)
+{
+	float4 hcs = mul(float4(vp_to_ndc(vp_size, vp_pos, DEPTH_MAX), 1), inv_p);
+	return normalize(hcs / hcs.w);
 }
 float2 ndc_to_vp(float2 vp_size, float3 ndc)
 {

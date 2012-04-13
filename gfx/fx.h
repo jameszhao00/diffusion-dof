@@ -30,7 +30,15 @@ namespace fx
 		CComPtr<PixelShader> ps_h; //horizontal
 		CComPtr<Uniforms> uniforms;
 	};
-
+	struct SSRContext
+	{
+		CComPtr<VertexShader> vs;
+		CComPtr<PixelShader> ps_old;
+		CComPtr<PixelShader> ps_gen_samples;
+		CComPtr<PixelShader> ps_combine_samples;
+		CComPtr<PixelShader> ps_shade;
+		CComPtr<Uniforms> uniforms;
+	};
 	enum BlurDirection
 	{
 		eVertical, eHorizontal
@@ -69,7 +77,7 @@ namespace fx
 	void make_fx_env(Gfx* gfx, FXEnvironment* env);
 	void make_gpu_env(Gfx* gfx, GpuEnvironment* env);
 
-	void make_ssr_ctx(Gfx* gfx, FXContext* ctx);
+	void make_ssr_ctx(Gfx* gfx, SSRContext* ctx);
 	void make_tonemap_ctx(Gfx* gfx, FXContext* ctx);
 	void make_luminance_ctx(Gfx* gfx, FXContext* ctx);
 	void make_resolve_ctx(Gfx* gfx, FXContext* ctx);
@@ -134,11 +142,15 @@ namespace fx
 		Target* output);
 	void ssr(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
-		const FXContext* fx_ctx,
+		const SSRContext* fx_ctx,
 		Resource* normal,
 		Resource* color,
 		Resource* depth,
-		Resource* debug,
+		Resource* noise,
+		Resource* scratch0_r,
+		Resource* scratch1_r,
+		Target* scratch0_t,
+		Target* scratch1_t,
 		Target* output);
 	void update_gpu_env(Gfx* gfx,		
 		const d3d::cbuffers::FSQuadCb* fsquad_cb_data,

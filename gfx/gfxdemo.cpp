@@ -162,6 +162,7 @@ void TW_CALL save_img_callback(void *ptr)
 		D3DX11SaveTextureToFile(demo->d3d.immediate_ctx, backbuffer_tex, D3DX11_IFF_BMP, (L"comparison/" + ws + L".bmp").c_str());
 		backbuffer_tex->Release();
 	}
+	if(0)
 	{
 		//depth
 		auto path = (L"comparison/" + ws + L"_depth.depth");
@@ -230,9 +231,9 @@ void GfxDemo::init(HINSTANCE instance)
 	obj_ori[0] = 0.17; obj_ori[1] = 0.01; obj_ori[2] = -0; obj_ori[3] = .99;
 	cam_dist = 0.57;
 	
-	light_dir_ws[0] = 0;
-	light_dir_ws[1] = 1;
-	light_dir_ws[2] = 0;
+	light_dir_ws[0] = 0.24;
+	light_dir_ws[1] = 0.55;
+	light_dir_ws[2] = -0.80;
 	do_anim = false;
 	TwCopyCDStringToClientFunc(CopyCDStringToClient); // CopyCDStringToClient implementation is given above
 	TwAddVarRW(bar, "Image Name", TW_TYPE_CDSTRING, &save_name, "");
@@ -254,6 +255,8 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "Viz X", TW_TYPE_INT32, &vx, "step=1");
 	TwAddVarRW(bar, "Viz Y", TW_TYPE_INT32, &vy, "step=1");
 	vx = 300; vy = 300;
+
+
 	
 	TwAddVarRW(bar, "Use Fresnel", TW_TYPE_BOOLCPP, &use_fresnel, "");
 	TwAddVarRW(bar, "Light Dir", TW_TYPE_DIR3F, light_dir_ws, "opened=true axisy=-y axisx=-x");
@@ -473,14 +476,18 @@ void GfxDemo::frame()
 		normal_srv, 
 		d3d.depth_srv, 
 		&gbuffer_debug_cb_data, 
-		debug_rtv[2]);		
+		debug_rtv[0]);		
 
-	d3d.immediate_ctx->GenerateMips(debug_srv[2]);
+	//d3d.immediate_ctx->GenerateMips(debug_srv[2]);
 
 	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 	d3d.immediate_ctx->PSSetSamplers(1, 1, &gpu_env.aniso_sampler.p);
-	fx::ssr(&d3d, &gpu_env, &ssr_ctx,
-		normal_srv, debug_srv[2], d3d.depth_srv, debug_srv[1], d3d.back_buffer_rtv);
+	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eHorizontal, 5, debug_srv[0], debug_rtv[1]);
+	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
+
+	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], d3d.depth_srv, noise, 
+		debug_srv[1], debug_srv[2], debug_rtv[1], debug_rtv[2],
+		d3d.back_buffer_rtv);
 	
 	/*
 	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
@@ -571,11 +578,14 @@ void GfxDemo::load_models()
 			nullptr);
 		textures.push_back(srv);
 	}
-	
+	D3DX11_IMAGE_LOAD_INFO load_info;
+	load_info.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	auto hr = D3DX11CreateShaderResourceViewFromFile(d3d.device, L"assets/source/ss_noise.png", &load_info, NULL, &noise, nullptr);
 	
 }
 void GfxDemo::load_shaders()
 {
+	//assert(0);// output linear Z so we don't have to convert from ndcz to linear z every pixel in ssr
 	d3d.create_shaders_and_il(L"shaders/standard_animated.hlsl", &vs.p, &ps.p, nullptr, &il.p, 
 		gfx::VertexTypes::eAnimatedStandard);
 	object_cb = d3d.create_cbuffer<d3d::cbuffers::ObjectCB>();
