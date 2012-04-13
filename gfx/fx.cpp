@@ -428,15 +428,54 @@ namespace fx
 		gfx->immediate_ctx->Draw(6, 0);
 	}
 
+#include <glm/glm.hpp>
+	void generate_grid(int h_subdivisions, int v_subdivisions, vector<glm::vec3>* verts, vector<unsigned int>* indices)
+	{
+		float h_spacing = 1.0 / h_subdivisions;
+		float v_spacing = 1.0 / v_subdivisions;
+		for(int r = 0; r < (v_subdivisions + 1); r++)
+		{
+			for(int c = 0; c < (h_subdivisions + 1); c++)
+			{
+				verts->push_back(glm::vec3((c * h_spacing - 0.5) * 2, (r * v_spacing - 0.5) * -2, 0.5));
+
+				if(r < v_subdivisions && c < h_subdivisions)
+				{
+					int h1 = h_subdivisions + 1;
+					int topleft = r * h1 + c;
+					int topright = r * h1 + (c+1);
+					int bottomleft = (r+1) * h1 + c;
+					int bottomright = (r+1) * h1 + (c+1);
+					indices->push_back(topleft);
+					indices->push_back(topright);
+					indices->push_back(bottomright);
+
+					indices->push_back(topleft);
+					indices->push_back(bottomright);
+					indices->push_back(bottomleft);
+				}
+			}
+		}
+	}
 	void make_ssr_ctx( Gfx* gfx, SSRContext* ctx )
 	{
 
 		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_5_0");	
+
 		gfx->device->CreateVertexShader(
 			vs_blob->GetBufferPointer(), 
 			vs_blob->GetBufferSize(), 
 			nullptr, 
 			&ctx->vs);
+		vs_blob->Release();
+		
+		vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_vs", "vs_5_0");	
+
+		gfx->device->CreateVertexShader(
+			vs_blob->GetBufferPointer(), 
+			vs_blob->GetBufferSize(), 
+			nullptr, 
+			&ctx->vs_shade);
 		vs_blob->Release();
 
 		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_5_0");
@@ -460,6 +499,15 @@ namespace fx
 		ps_blob->Release();	
 
 		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::FSQuadCb>();
+
+
+		vector<glm::vec3> grid_verts;
+		vector<unsigned int> grid_indices;
+		generate_grid(160, 120, &grid_verts, &grid_indices);	
+
+
+		gfx->create_draw_op((char*)grid_verts.data(), grid_verts.size(), sizeof(glm::vec3), grid_indices.data(), grid_indices.size(), nullptr, &ctx->grid_drawop);
+
 	}
 
 	void ssr( 
@@ -476,7 +524,7 @@ namespace fx
 		Target* scratch1_t,
 		Target* output )
 	{
-		if(1)
+		if(0)
 		{
 			Target* targets[TARGETS_COUNT] = {output};
 			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise};
@@ -551,22 +599,41 @@ namespace fx
 				Target* targets[TARGETS_COUNT] = {};
 				Resource* resources[RESOURCES_COUNT] = {};
 				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->VSSetShaderResources(0, RESOURCES_COUNT, resources);
 				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
 			}
 
-
+			
 			{
 				Target* targets[TARGETS_COUNT] = {output};
-				Resource* resources[RESOURCES_COUNT] = {scratch1_r, color};
+				Resource* resources[RESOURCES_COUNT] = {scratch1_r, color, depth};
 
 				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+				gfx->immediate_ctx->VSSetShaderResources(0, RESOURCES_COUNT, resources);
 
+
+				gfx->immediate_ctx->IASetInputLayout(gpu_env->fsquad_il);
+				gfx->immediate_ctx->IASetVertexBuffers(0, 1, &fx_ctx->grid_drawop.vb.p, &gpu_env->fsquad_stride, 
+					&gpu_env->zero);
+				gfx->immediate_ctx->IASetIndexBuffer(fx_ctx->grid_drawop.ib, DXGI_FORMAT_R32_UINT, 0);
+
+
+				gfx->immediate_ctx->VSSetShader(fx_ctx->vs_shade, nullptr, 0);
 				gfx->immediate_ctx->PSSetShader(fx_ctx->ps_shade, nullptr, 0);
 
-				gfx->immediate_ctx->Draw(6, 0);
+				gfx->immediate_ctx->VSSetSamplers(0, 1, &gpu_env->linear_sampler.p);
+				gfx->immediate_ctx->DrawIndexed(fx_ctx->grid_drawop.ib_count, 0, 0);
 			}
 
+			{
+				//clear rtv/srv bindings
+				Target* targets[TARGETS_COUNT] = {output};
+				Resource* resources[RESOURCES_COUNT] = {};
+				gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+				gfx->immediate_ctx->VSSetShaderResources(0, RESOURCES_COUNT, resources);
+				gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
+			}
 
 		}
 	}

@@ -1,8 +1,9 @@
 #include "shader.h"
 
-SamplerState g_albedo_sampler;
+SamplerState g_linear;
 
-Texture2D <float4> g_albedo;
+Texture2D <float4> g_albedo : register(t[0]);
+Texture2D <float4> g_noise : register(t[1]);
 
 cbuffer ObjectCB
 {
@@ -70,7 +71,14 @@ PS_OUT ps( VS2PS IN)
 {
 	PS_OUT OUT;
 	//hack to fix gamma.... i use d3dx to load textures...
-	float4 albedo = pow(abs(g_albedo.Sample(g_albedo_sampler, IN.uv)), 2.2);
+	float4 albedo = pow(abs(g_albedo.Sample(g_linear, IN.uv)), 2.2);
+	/*
+	float noise_intensity = 0.02;
+	float3 raw_noise = g_noise.Sample(g_linear, (IN.uv * 10) % 1);
+	float3 noise = noise_intensity * normalize(normalize(raw_noise) - 0.5);
+
+	OUT.normal = float4(normalize(IN.normal + noise), 1);
+	*/
 	OUT.normal = float4(normalize(IN.normal), 1);
 	OUT.albedo = albedo.xyz;
 	OUT.debug = (g_misc[0] == 1);

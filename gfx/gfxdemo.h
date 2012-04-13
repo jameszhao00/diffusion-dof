@@ -83,6 +83,7 @@ struct GfxDemo
 	char* save_name;
 	ID3D11ShaderResourceView* noise;
 
+
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;
 };

@@ -33,11 +33,14 @@ namespace fx
 	struct SSRContext
 	{
 		CComPtr<VertexShader> vs;
+		CComPtr<VertexShader> vs_shade;
 		CComPtr<PixelShader> ps_old;
 		CComPtr<PixelShader> ps_gen_samples;
 		CComPtr<PixelShader> ps_combine_samples;
 		CComPtr<PixelShader> ps_shade;
 		CComPtr<Uniforms> uniforms;
+
+		d3d::DrawOp grid_drawop;
 	};
 	enum BlurDirection
 	{

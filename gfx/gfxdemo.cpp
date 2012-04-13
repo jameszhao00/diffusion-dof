@@ -466,6 +466,7 @@ void GfxDemo::frame()
 		{
 			srvs[0] = nullptr;
 		}
+		srvs[1] = noise;
 		d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 		d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
@@ -579,12 +580,15 @@ void GfxDemo::load_models()
 		textures.push_back(srv);
 	}
 	D3DX11_IMAGE_LOAD_INFO load_info;
-	load_info.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	load_info.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	auto hr = D3DX11CreateShaderResourceViewFromFile(d3d.device, L"assets/source/ss_noise.png", &load_info, NULL, &noise, nullptr);
 	
 }
 void GfxDemo::load_shaders()
 {
+
+
+
 	//assert(0);// output linear Z so we don't have to convert from ndcz to linear z every pixel in ssr
 	d3d.create_shaders_and_il(L"shaders/standard_animated.hlsl", &vs.p, &ps.p, nullptr, &il.p, 
 		gfx::VertexTypes::eAnimatedStandard);

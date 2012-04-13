@@ -26,16 +26,8 @@ struct VS2PS
 {
 	float4 position : SV_POSITION;
 	float3 viewspace_ray : RAY0;
+	float2 uv : UV;
 };
-VS2PS vs(float3 position : POSITION)
-{	
-	VS2PS OUT;
-	OUT.position = float4(position.xy, 0.5, 1);
-	float4 vs_ray = mul(float4(position.xy, 1, 1), g_inv_p);
-	OUT.viewspace_ray = float3(vs_ray.xy / vs_ray.z, 1);
-	return OUT;
-}
-
 float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, float3 r_vs)
 {
 	//calculate the desired t. look at math.nb
@@ -129,8 +121,39 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 		}
 	}
 	return target_vp;
+
 }
-#define CACHE_POINTS_SEPARATION 1
+VS2PS vs(float3 position : POSITION)
+{	
+	VS2PS OUT;
+	OUT.position = float4(position.xy, 0.5, 1);
+	float4 vs_ray = mul(float4(position.xy, 1, 1), g_inv_p);
+	OUT.viewspace_ray = float3(vs_ray.xy / vs_ray.z, 1);
+	OUT.uv = float2(position.x * 0.5 + 0.5, -position.y * 0.5 + 0.5);
+	return OUT;
+}
+#define CACHE_POINTS_SEPARATION 5
+VS2PS shade_vs(float3 position : POSITION, out float3 debug : DEBUG, uint id : SV_VertexID)
+{	
+	VS2PS OUT;
+	OUT.position = float4(position.xy, 0.5, 1);
+	float4 vs_ray = mul(float4(position.xy, 1, 1), g_inv_p);
+	OUT.viewspace_ray = float3(vs_ray.xy / vs_ray.z, 1);
+	OUT.uv = float2(position.x * 0.5 + 0.5, -position.y * 0.5 + 0.5);
+	
+	uint2 vp_size;
+	g_normal.GetDimensions(vp_size.x, vp_size.y);
+
+	float2 reflection_uv = vp_to_uv(vp_size, ndc_to_vp(vp_size, position.xyz) / CACHE_POINTS_SEPARATION);
+	float2 uv = vp_to_uv(vp_size, ndc_to_vp(vp_size, position.xyz));
+
+	Texture2D combined_samples_tex = g_normal;
+	float4 reflection_color = combined_samples_tex.SampleGrad(g_linear, reflection_uv, 0, 0);
+	float depth_ndc = g_depth.SampleGrad(g_linear, uv, 0, 0);
+	debug = reflection_color.xyz;
+	//OUT.position.z = depth_ndc;
+	return OUT;
+}
 float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 {
 	uint2 vp_size;
@@ -150,12 +173,15 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 r_vs = reflect(dir_vs, n_vs);
 	float half_cot_fov = g_debug_vars[0];
 	float4 reflection_color = 0;
-	float noise_intensity = 0.005;
-	float3 noise = noise_intensity * normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz);
+
+	float noise_intensity = 0.2;
+	float3 raw_noise = g_noise.Load(float3(IN.position.xy % float2(256, 256), 0));
+	float3 noise = noise_intensity * normalize(normalize(raw_noise) - 0.5);
+
 	r_vs = normalize(r_vs + noise);
 	float target_t;
 	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
-	if(target_t != -1) return g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
+	if(target_t != -1) return (1 - saturate(target_t/80)) * g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
 	else return 0;
 }
 float4 combine_samples_ps(VS2PS IN) : SV_TARGET
@@ -182,8 +208,9 @@ float4 combine_samples_ps(VS2PS IN) : SV_TARGET
 	//return samples_tex.Load(float3(IN.position.xy, 0));
 	return result / (CACHE_POINTS_SEPARATION * CACHE_POINTS_SEPARATION);
 }
-float4 shade_ps(VS2PS IN) : SV_TARGET
+float4 shade_ps(VS2PS IN, float3 debug : DEBUG) : SV_TARGET
 {
+	//return debug.xyzz;
 	{
 		float3 pix_coord = float3(floor(IN.position.xy / CACHE_POINTS_SEPARATION) * CACHE_POINTS_SEPARATION + 0.5, 0);
 		float patch_sample_i = (IN.position.y - pix_coord.y) * CACHE_POINTS_SEPARATION + (IN.position.x - pix_coord.x);
@@ -195,11 +222,13 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 	//return combined_samples_tex.Load(float3(IN.position.xy, 0));
 	//return combined_samples_tex.Load(float3(IN.position.xy / CACHE_POINTS_SEPARATION, 0));
-	
-	float4 base_color = float4(g_albedo.Load(float3(IN.position.xy, 0)).xyz, 1);
 
 	float2 uv = vp_to_uv(vp_size, IN.position.xy / CACHE_POINTS_SEPARATION);
-	return 0.2 * combined_samples_tex.Sample(g_linear, uv) + 0.8 * base_color;
+	float4 reflection_color = combined_samples_tex.Sample(g_linear, uv);
+	//float4 reflection_color = combined_samples_tex.Load(float3(IN.position.xy / CACHE_POINTS_SEPARATION, 0));
+	float4 base_color = float4(g_albedo.Load(float3(IN.position.xy, 0)).xyz, 1);
+	return 0.05 * debug.xyzz//reflection_color 
+		+ 0.95 * base_color;
 	return 1;
 }
 float4 ps(VS2PS IN) : SV_TARGET
@@ -215,7 +244,8 @@ float4 ps(VS2PS IN) : SV_TARGET
 	//if((pix_coord.x - 0.5)%8 != 0 || (pix_coord.y - 0.5)%8 != 0) return base_color;
 
 	float ndc_depth = g_depth.Load(pix_coord, 0);
-	float3 pos_vs = get_vs_pos(normalize(IN.viewspace_ray), ndc_depth, g_proj_constants.xy);
+	//we cannot normalize the viewspace ray!
+	float3 pos_vs = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
 	//if(ndc_depth == DEPTH_MAX) return 0;
 	//be careful about the XYZ when normalizing!!!
 	float3 dir_vs = normalize(IN.viewspace_ray.xyz);
