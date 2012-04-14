@@ -242,7 +242,9 @@ void GfxDemo::init(HINSTANCE instance)
 	
 
 	camera_i = 0;
-	noise_ratio = 0.09;
+	noise_ratio = 0.01;
+	ssr_blur_ratio = 2.8;
+	bilateral_z = true;
 	TwAddVarRW(bar, "Camera", TW_TYPE_INT32, &camera_i, "min=0");
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
 	TwAddVarRW(bar, "Dist", TW_TYPE_FLOAT, &cam_dist, "step=0.001");
@@ -252,6 +254,8 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 	TwAddVarRW(bar, "Noise Ratio", TW_TYPE_FLOAT, &noise_ratio, "min=0.001 max=0.2 step=0.001");
+	TwAddVarRW(bar, "SSR Blur Ratio", TW_TYPE_FLOAT, &ssr_blur_ratio, "min=.5 max=5 step=0.05");
+	TwAddVarRW(bar, "Bilateral Z", TW_TYPE_BOOLCPP, &bilateral_z, "");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");
 	TwAddVarRW(bar, "Viz X", TW_TYPE_INT32, &vx, "step=1");
@@ -402,8 +406,10 @@ void GfxDemo::frame()
 	fsquad_cb_data.proj_constants[1] = (-f * n) / (f - n);
 	fsquad_cb_data.debug_vars[0] = cos(fov * 0.5 )/sin(fov * 0.5 );
 	fsquad_cb_data.debug_vars[1] = vx;
-	fsquad_cb_data.debug_vars[2] = vy;
+	//fsquad_cb_data.debug_vars[2] = vy;
+	fsquad_cb_data.debug_vars[2] = ssr_blur_ratio;
 	fsquad_cb_data.debug_vars[3] = noise_ratio;
+	fsquad_cb_data.vars[0] = (float)bilateral_z;
 	
 	auto wv = XMMatrixMultiply(w, v);
 	auto wvp = XMMatrixMultiply(wv, p);

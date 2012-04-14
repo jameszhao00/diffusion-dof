@@ -83,6 +83,8 @@ struct GfxDemo
 	char* save_name;
 	ID3D11ShaderResourceView* noise;
 	float noise_ratio;
+	float ssr_blur_ratio;
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;
+	bool bilateral_z;
 };

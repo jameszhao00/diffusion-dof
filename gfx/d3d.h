@@ -38,6 +38,7 @@ namespace d3d
 			//1 = (-f * n) / (f - n)
 			float proj_constants[4]; 
 			float debug_vars[4];
+			float vars[4];
 			float proj[4][4];
 
 		};

@@ -2,15 +2,142 @@
 SamplerState g_linear : register(s[0]);
 SamplerState g_aniso : register(s[1]);
 
+cbuffer weights : register(b[1])
+{
+static float filter_weights[121] = {	
+ 0.001259,
+0.0020758,
+0.0030625,
+0.0040431,
+0.0047764,
+0.0050492,
+0.0047764,
+0.0040431,
+0.0030625,
+0.0020758,
+ 0.001259,
+0.0020758,
+0.0034224,
+0.0050492,
+ 0.006666,
+0.0078749,
+0.0083248,
+0.0078749,
+ 0.006666,
+0.0050492,
+0.0034224,
+0.0020758,
+0.0030625,
+0.0050492,
+0.0074493,
+0.0098346,
+ 0.011618,
+ 0.012282,
+ 0.011618,
+0.0098346,
+0.0074493,
+0.0050492,
+0.0030625,
+0.0040431,
+ 0.006666,
+0.0098346,
+ 0.012984,
+ 0.015338,
+ 0.016214,
+ 0.015338,
+ 0.012984,
+0.0098346,
+ 0.006666,
+0.0040431,
+0.0047764,
+0.0078749,
+ 0.011618,
+ 0.015338,
+  0.01812,
+ 0.019155,
+  0.01812,
+ 0.015338,
+ 0.011618,
+0.0078749,
+0.0047764,
+0.0050492,
+0.0083248,
+ 0.012282,
+ 0.016214,
+ 0.019155,
+ 0.020249,
+ 0.019155,
+ 0.016214,
+ 0.012282,
+0.0083248,
+0.0050492,
+0.0047764,
+0.0078749,
+ 0.011618,
+ 0.015338,
+  0.01812,
+ 0.019155,
+  0.01812,
+ 0.015338,
+ 0.011618,
+0.0078749,
+0.0047764,
+0.0040431,
+ 0.006666,
+0.0098346,
+ 0.012984,
+ 0.015338,
+ 0.016214,
+ 0.015338,
+ 0.012984,
+0.0098346,
+ 0.006666,
+0.0040431,
+0.0030625,
+0.0050492,
+0.0074493,
+0.0098346,
+ 0.011618,
+ 0.012282,
+ 0.011618,
+0.0098346,
+0.0074493,
+0.0050492,
+0.0030625,
+0.0020758,
+0.0034224,
+0.0050492,
+ 0.006666,
+0.0078749,
+0.0083248,
+0.0078749,
+ 0.006666,
+0.0050492,
+0.0034224,
+0.0020758,
+ 0.001259,
+0.0020758,
+0.0030625,
+0.0040431,
+0.0047764,
+0.0050492,
+0.0047764,
+0.0040431,
+0.0030625,
+0.0020758,
+ 0.001259,
+};
+};
 #if MSAA_COUNT > 1
 Texture2DMS<float4, MSAA_COUNT> g_normal : register(t[0]);
 Texture2DMS<float3, MSAA_COUNT> g_albedo : register(t[1]);
 Texture2DMS<float, MSAA_COUNT> g_depth : register(t[2]);
 #else
 Texture2D<float4> g_normal : register(t[0]);
-Texture2D<float3> g_albedo : register(t[1]);
+Texture2D<float3> g_color : register(t[1]);
 Texture2D<float> g_depth : register(t[2]);
 Texture2D<float3> g_noise: register(t[3]);
+Texture2D<float4> g_samples : register(t[4]);
 #endif
 #define z_error_bounds 25
 #define base_increment 10
@@ -19,8 +146,10 @@ cbuffer FSQuadCB : register(b[0])
 	float4x4 g_inv_p;
 	float4 g_proj_constants;
 	float4 g_debug_vars; //g_debug_vars[0] should have 0.5 * cot(fov)
-	//debug vars[1]/[2] have x/y pos of the pixel to show rays for
+	//NOT LELEVANT! //debug vars[1]/[2] have x/y pos of the pixel to show rays for
+	//debug vars[2] has gaussian multiplier
 	//debug vars[3] has noise ratio
+	float4 g_vars;
 	float4x4 g_proj;
 };
 struct VS2PS
@@ -154,138 +283,10 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
 	if(target_t != -1)
 	{
-		//return (1 - saturate(target_t / 35)) * RED;
-		return// (1 - saturate(target_t / 50)) * 
-			g_albedo.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyzz;		
+		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
 	}
-	else return 0;
+	else return float4(0, 0, 0, -1);
 }
-cbuffer weights : register(b[1])
-{
-static float filter_weights[121] = {	
- 0.001259,
-0.0020758,
-0.0030625,
-0.0040431,
-0.0047764,
-0.0050492,
-0.0047764,
-0.0040431,
-0.0030625,
-0.0020758,
- 0.001259,
-0.0020758,
-0.0034224,
-0.0050492,
- 0.006666,
-0.0078749,
-0.0083248,
-0.0078749,
- 0.006666,
-0.0050492,
-0.0034224,
-0.0020758,
-0.0030625,
-0.0050492,
-0.0074493,
-0.0098346,
- 0.011618,
- 0.012282,
- 0.011618,
-0.0098346,
-0.0074493,
-0.0050492,
-0.0030625,
-0.0040431,
- 0.006666,
-0.0098346,
- 0.012984,
- 0.015338,
- 0.016214,
- 0.015338,
- 0.012984,
-0.0098346,
- 0.006666,
-0.0040431,
-0.0047764,
-0.0078749,
- 0.011618,
- 0.015338,
-  0.01812,
- 0.019155,
-  0.01812,
- 0.015338,
- 0.011618,
-0.0078749,
-0.0047764,
-0.0050492,
-0.0083248,
- 0.012282,
- 0.016214,
- 0.019155,
- 0.020249,
- 0.019155,
- 0.016214,
- 0.012282,
-0.0083248,
-0.0050492,
-0.0047764,
-0.0078749,
- 0.011618,
- 0.015338,
-  0.01812,
- 0.019155,
-  0.01812,
- 0.015338,
- 0.011618,
-0.0078749,
-0.0047764,
-0.0040431,
- 0.006666,
-0.0098346,
- 0.012984,
- 0.015338,
- 0.016214,
- 0.015338,
- 0.012984,
-0.0098346,
- 0.006666,
-0.0040431,
-0.0030625,
-0.0050492,
-0.0074493,
-0.0098346,
- 0.011618,
- 0.012282,
- 0.011618,
-0.0098346,
-0.0074493,
-0.0050492,
-0.0030625,
-0.0020758,
-0.0034224,
-0.0050492,
- 0.006666,
-0.0078749,
-0.0083248,
-0.0078749,
- 0.006666,
-0.0050492,
-0.0034224,
-0.0020758,
- 0.001259,
-0.0020758,
-0.0030625,
-0.0040431,
-0.0047764,
-0.0050492,
-0.0047764,
-0.0040431,
-0.0030625,
-0.0020758,
- 0.001259,
-};
-};
 float4 shade_ps(VS2PS IN) : SV_TARGET
 {
 	
@@ -293,22 +294,41 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 	float2 pix_coord = IN.position.xy;
 
-	Texture2D samples_tex = g_normal;
+	const Texture2D samples_tex = g_samples;
 	float2 uv = vp_to_uv(vp_size, pix_coord);
 	float2 pix_size_uv = vp_pix_uv(vp_size);
-	
+	float4 sample0 = samples_tex.Sample(g_linear, uv);
+	float3 sample0_color = sample0.xyz;
+	float sample0_t = sample0.w;
 
+	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
+	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float3 filtered = 0;
+	float total_weights = 0;
+	float blur_distance = g_debug_vars[2];
 	for(int i = -5; i < 6; i++)
 	{
 		for(int j = -5; j < 6; j++)
 		{
-			float3 sample = samples_tex.Sample(g_linear, uv + 3 * float2(i, j) * pix_size_uv);
-			filtered += filter_weights[(i + 5) * 11 + (j + 5)] * saturate(sample);
-			//filtered += saturate(sample);
+			float2 offset = float2(i, j) * blur_distance;
+			float4 sample = samples_tex.Sample(g_linear, uv + offset * pix_size_uv);
+
+			float3 color = sample.xyz;
+			float sample_z = unproject_z(g_depth.Load(float3(pix_coord + offset, 0)), g_proj_constants);
+			float3 sample_normal = g_normal.Load(float3(pix_coord + offset, 0));
+			float normal_diff = 1 - saturate(dot(sample_normal, sample0_normal)); //assume already normalized
+			float z_diff = abs(sample_z - sample0_z);
+			float diff = 5 * normal_diff + z_diff;
+			//ideally we want to separate the diff out
+			float range = exp(-diff*diff/9);
+
+			float weight = filter_weights[(i + 5) * 11 + (j + 5)];
+			if(g_vars[0] == 1) weight *= range;
+
+			total_weights += weight;			
+
+			filtered += weight * saturate(sample);
 		}
 	}
-	//return samples_tex.Sample(g_linear, uv).xyzz +  g_albedo.Load(float3(pix_coord, 0)).xyzz;
-	//return .5 * filtered.xyzz + .5 * g_albedo.Load(float3(pix_coord, 0)).xyzz;
-	return .03 * filtered.xyzz + .97 * g_albedo.Load(float3(pix_coord, 0)).xyzz;
+	return .3 * filtered.xyzz / total_weights + .7 * g_color.Load(float3(pix_coord, 0)).xyzz;
 }

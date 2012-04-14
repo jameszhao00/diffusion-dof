@@ -515,7 +515,7 @@ namespace fx
 
 		{
 			Target* targets[TARGETS_COUNT] = {output};
-			Resource* resources[RESOURCES_COUNT] = {scratch0_r, color};
+			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise, scratch0_r};
 
 			gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 			gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
