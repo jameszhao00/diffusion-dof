@@ -47,7 +47,7 @@ float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, flo
 			(-half_cot_fov * vp_size.y * pos_vs.y + (-2 * vpy + vp_size.y) * pos_vs.z) / 
 			(2 * vpy * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);	
 }
-#define MAX_T 1000
+#define MAX_T 3000
 float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, out float target_t)
 {	
 	target_t = -1;
@@ -70,6 +70,8 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
 
 		float t = vpy_to_t(s_pos_ss.y, half_cot_fov, vp_size, pos_vs, r_vs);
+		//cap ray walk dist
+		if(t > 100) break;
 		max_t = t;
 		max_pos_vp = s_pos_ss;
 		float s_desired_z_ndc = 
@@ -183,56 +185,57 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float sample0_t = sample0.w;
 	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
-	float3 filtered = 0;
 	float total_weights = 0;
 	float blur_distance = g_debug_vars[2];
-	float avg_blur = 0;
-	
-	for(int i = -2; i < 3; i++)
+	float3 filtered = 0;
+	float blur_scale = 1;//clamp(sample0_t, 0,28) / 28;
+
+	for(int i = -3; i < 4; i++)
 	{
-		for(int j = -2; j < 3; j++)
+		for(int j = -3; j < 4; j++)
 		{		
 			
 			float2 offset = float2(i, j) * blur_distance;
 			float4 sample = samples_tex.Sample(g_linear, uv + offset * pix_size_uv);
+			float sample_t = sample.w;
+
+			//to fix blur edges where t is tiny and MAX_T is 3000...
+			//also tried straight up decreasing MAX_T... 
+			//think it sharpened the edges
+			if(sample_t == MAX_T) sample_t = sample0_t;
 
 			float3 color = sample.xyz;
 
 			float sample_z = unproject_z(g_depth.Load(float3(pix_coord + offset, 0)), g_proj_constants.xy);	
 			float3 sample_normal = g_normal.Load(float3(pix_coord + offset, 0));
 
-			if(1)
-			{
-				sample_z = unproject_z(g_depth.Sample(g_linear, uv + offset * pix_size_uv), g_proj_constants.xy);	
-				sample_normal = g_normal.Sample(g_linear, uv + offset * pix_size_uv);
-			}
-
 			//we want dot's range (-1, 1) to go to (0, 2)
 			float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
-			float sample_t = sample.w;
+			normal_diff *= 2;
 			
 			float z_diff = clamp(abs(sample_z - sample0_z) - 3, 0, 1000);
-			float diff = 10 * normal_diff + 2 * z_diff;
-			//diff = 8 * (saturate(sample_t / 50));
-			
+			float diff = 10 * normal_diff + 2 * z_diff;			
 			
 			//ideally we want to separate the diff out
 			float range = exp(-diff*diff/9);
 			
-			float weight = gauss2d(abs(float2(i, j)), clamp(sample_t / 10, 0, 10));
-
-			if(g_vars[0] == 1) weight *= range;
+			float weight = gauss2d(abs(float2(i, j)), blur_scale * clamp(sample_t / 15, 0, 3));
+			
+			if(g_vars[0] == 1) weight *= range;		
 
 			total_weights += weight;			
 
 			filtered += weight * saturate(sample);
 
-			//avg_blur += saturate(sample_t / 50);
-			
 		}
 	}
-	//return total_normal_diff / 121;
-	//return filtered.xyzz / total_weights;// * .03 + .97 * g_color.Load(float3(pix_coord, 0)).xyzz;
-	//return avg_blur / 121;
-	return .05 * filtered.xyzz / total_weights + .95 * g_color.Load(float3(pix_coord, 0)).xyzz;
+
+	filtered /= total_weights;// == 0 ? 1 : total_weights;
+	float3 total = filtered;
+	//return sample0_t != MAX_T ? sample0_t / 30 : 0;
+	//return (total < 0).xyzz;
+	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + total.xyzz * 0.05;
+
+	//return .99 * g_color.Load(float3(pix_coord, 0)).xyzz + filtered.xyzz / total_weights * 0.01;// * BLUE;
+	//return .05 * filtered.xyzz / total_weights + .95 * g_color.Load(float3(pix_coord, 0)).xyzz;
 }

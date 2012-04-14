@@ -254,7 +254,7 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 	TwAddVarRW(bar, "Noise Ratio", TW_TYPE_FLOAT, &noise_ratio, "min=0.001 max=0.2 step=0.001");
-	TwAddVarRW(bar, "SSR Blur Ratio", TW_TYPE_FLOAT, &ssr_blur_ratio, "min=.5 max=5 step=0.05");
+	TwAddVarRW(bar, "SSR Blur Ratio", TW_TYPE_FLOAT, &ssr_blur_ratio, "min=0 max=15 step=0.05");
 	TwAddVarRW(bar, "Bilateral Z", TW_TYPE_BOOLCPP, &bilateral_z, "");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");

@@ -255,9 +255,9 @@ namespace package
 
 			}
 			//for(auto animation : model->animations)
-			for(auto it = model->animations.begin(); it != model->animations.end(); it++)
+			for(auto anim_it = model->animations.begin(); anim_it != model->animations.end(); anim_it++)
 			{
-				auto animation = *it;
+				auto animation = *anim_it;
 				write_animation(out, animation.get());	
 				assert(out.good());
 				written_animations_count ++;
