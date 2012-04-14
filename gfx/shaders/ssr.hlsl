@@ -2,132 +2,6 @@
 SamplerState g_linear : register(s[0]);
 SamplerState g_aniso : register(s[1]);
 
-cbuffer weights : register(b[1])
-{
-static float filter_weights[121] = {	
- 0.001259,
-0.0020758,
-0.0030625,
-0.0040431,
-0.0047764,
-0.0050492,
-0.0047764,
-0.0040431,
-0.0030625,
-0.0020758,
- 0.001259,
-0.0020758,
-0.0034224,
-0.0050492,
- 0.006666,
-0.0078749,
-0.0083248,
-0.0078749,
- 0.006666,
-0.0050492,
-0.0034224,
-0.0020758,
-0.0030625,
-0.0050492,
-0.0074493,
-0.0098346,
- 0.011618,
- 0.012282,
- 0.011618,
-0.0098346,
-0.0074493,
-0.0050492,
-0.0030625,
-0.0040431,
- 0.006666,
-0.0098346,
- 0.012984,
- 0.015338,
- 0.016214,
- 0.015338,
- 0.012984,
-0.0098346,
- 0.006666,
-0.0040431,
-0.0047764,
-0.0078749,
- 0.011618,
- 0.015338,
-  0.01812,
- 0.019155,
-  0.01812,
- 0.015338,
- 0.011618,
-0.0078749,
-0.0047764,
-0.0050492,
-0.0083248,
- 0.012282,
- 0.016214,
- 0.019155,
- 0.020249,
- 0.019155,
- 0.016214,
- 0.012282,
-0.0083248,
-0.0050492,
-0.0047764,
-0.0078749,
- 0.011618,
- 0.015338,
-  0.01812,
- 0.019155,
-  0.01812,
- 0.015338,
- 0.011618,
-0.0078749,
-0.0047764,
-0.0040431,
- 0.006666,
-0.0098346,
- 0.012984,
- 0.015338,
- 0.016214,
- 0.015338,
- 0.012984,
-0.0098346,
- 0.006666,
-0.0040431,
-0.0030625,
-0.0050492,
-0.0074493,
-0.0098346,
- 0.011618,
- 0.012282,
- 0.011618,
-0.0098346,
-0.0074493,
-0.0050492,
-0.0030625,
-0.0020758,
-0.0034224,
-0.0050492,
- 0.006666,
-0.0078749,
-0.0083248,
-0.0078749,
- 0.006666,
-0.0050492,
-0.0034224,
-0.0020758,
- 0.001259,
-0.0020758,
-0.0030625,
-0.0040431,
-0.0047764,
-0.0050492,
-0.0047764,
-0.0040431,
-0.0030625,
-0.0020758,
- 0.001259,
-};
-};
 #if MSAA_COUNT > 1
 Texture2DMS<float4, MSAA_COUNT> g_normal : register(t[0]);
 Texture2DMS<float3, MSAA_COUNT> g_albedo : register(t[1]);
@@ -173,7 +47,7 @@ float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, flo
 			(-half_cot_fov * vp_size.y * pos_vs.y + (-2 * vpy + vp_size.y) * pos_vs.z) / 
 			(2 * vpy * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);	
 }
-
+#define MAX_T 1000
 float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, out float target_t)
 {	
 	target_t = -1;
@@ -285,11 +159,18 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	{
 		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
 	}
-	else return float4(0, 0, 0, -1);
+	else return float4(0, 0, 0, MAX_T);
+}
+float gauss(float x, float sigma)
+{
+	return exp(-x*x/(sigma * sigma));
+}
+float gauss2d(float2 dp, float sigma)
+{
+	return exp(-dot(dp, dp)/(sigma * sigma));
 }
 float4 shade_ps(VS2PS IN) : SV_TARGET
-{
-	
+{	
 	uint2 vp_size;
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 	float2 pix_coord = IN.position.xy;
@@ -300,35 +181,58 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float4 sample0 = samples_tex.Sample(g_linear, uv);
 	float3 sample0_color = sample0.xyz;
 	float sample0_t = sample0.w;
-
 	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float3 filtered = 0;
 	float total_weights = 0;
 	float blur_distance = g_debug_vars[2];
-	for(int i = -5; i < 6; i++)
+	float avg_blur = 0;
+	
+	for(int i = -2; i < 3; i++)
 	{
-		for(int j = -5; j < 6; j++)
-		{
+		for(int j = -2; j < 3; j++)
+		{		
+			
 			float2 offset = float2(i, j) * blur_distance;
 			float4 sample = samples_tex.Sample(g_linear, uv + offset * pix_size_uv);
 
 			float3 color = sample.xyz;
-			float sample_z = unproject_z(g_depth.Load(float3(pix_coord + offset, 0)), g_proj_constants);
+
+			float sample_z = unproject_z(g_depth.Load(float3(pix_coord + offset, 0)), g_proj_constants.xy);	
 			float3 sample_normal = g_normal.Load(float3(pix_coord + offset, 0));
-			float normal_diff = 1 - saturate(dot(sample_normal, sample0_normal)); //assume already normalized
-			float z_diff = abs(sample_z - sample0_z);
-			float diff = 5 * normal_diff + z_diff;
+
+			if(1)
+			{
+				sample_z = unproject_z(g_depth.Sample(g_linear, uv + offset * pix_size_uv), g_proj_constants.xy);	
+				sample_normal = g_normal.Sample(g_linear, uv + offset * pix_size_uv);
+			}
+
+			//we want dot's range (-1, 1) to go to (0, 2)
+			float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
+			float sample_t = sample.w;
+			
+			float z_diff = clamp(abs(sample_z - sample0_z) - 3, 0, 1000);
+			float diff = 10 * normal_diff + 2 * z_diff;
+			//diff = 8 * (saturate(sample_t / 50));
+			
+			
 			//ideally we want to separate the diff out
 			float range = exp(-diff*diff/9);
+			
+			float weight = gauss2d(abs(float2(i, j)), clamp(sample_t / 10, 0, 10));
 
-			float weight = filter_weights[(i + 5) * 11 + (j + 5)];
 			if(g_vars[0] == 1) weight *= range;
 
 			total_weights += weight;			
 
 			filtered += weight * saturate(sample);
+
+			//avg_blur += saturate(sample_t / 50);
+			
 		}
 	}
-	return .3 * filtered.xyzz / total_weights + .7 * g_color.Load(float3(pix_coord, 0)).xyzz;
+	//return total_normal_diff / 121;
+	//return filtered.xyzz / total_weights;// * .03 + .97 * g_color.Load(float3(pix_coord, 0)).xyzz;
+	//return avg_blur / 121;
+	return .05 * filtered.xyzz / total_weights + .95 * g_color.Load(float3(pix_coord, 0)).xyzz;
 }
