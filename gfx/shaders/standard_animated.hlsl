@@ -35,6 +35,7 @@ struct PS_OUT
 	float4 normal : SV_TARGET0;
 	float3 albedo : SV_TARGET1;
 	float4 debug : SV_TARGET2;
+	float depth : SV_DEPTH;
 };
 VS2PS vs(App2VS IN)
 {
@@ -63,16 +64,17 @@ VS2PS vs(App2VS IN)
 		OUT.vs_pos = mul(float4(IN.position.xyz, 1), g_wv).xyz;
 		//OUT.normal = IN.normal.xyz;
 	}
-	
     return OUT;
 }
 PS_OUT ps( VS2PS IN)
 {
 	PS_OUT OUT;
+	OUT.depth = IN.position.w / Z_FAR;
 	//hack to fix gamma.... i use d3dx to load textures...
 	float4 albedo = pow(abs(g_albedo.Sample(g_albedo_sampler, IN.uv)), 2.2);
 	OUT.normal = float4(normalize(IN.normal), 1);
 	OUT.albedo = albedo.xyz;
 	OUT.debug = (g_misc[0] == 1);
+
 	return OUT;
 }

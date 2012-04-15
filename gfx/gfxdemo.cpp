@@ -206,7 +206,7 @@ void GfxDemo::init(HINSTANCE instance)
 {
 	//weird... why do we need to initalize?
 	//if we don't init drawop's ccomptrs are initialized to garbage
-	invert_depth = true;
+	invert_depth = false;
 	gbuffer_debug_mode = 0;
 	aa_visualize = false;
 	anim_frame = 0;
@@ -298,7 +298,13 @@ void clear_views(T** views, int num_views)
 void GfxDemo::frame()
 {		
 
+
+
 	if(d3d.device == nullptr) return;
+
+	LARGE_INTEGER start;
+	QueryPerformanceCounter(&start);
+
 
 	D3D11_TEXTURE2D_DESC t2d_desc;
 	ID3D11Texture2D* normal_resource = nullptr;
@@ -330,7 +336,8 @@ void GfxDemo::frame()
 	d3d.immediate_ctx->ClearRenderTargetView(debug_rtv[2], color);
 	d3d.immediate_ctx->ClearRenderTargetView(normal_rtv, color);
 	d3d.immediate_ctx->ClearRenderTargetView(albedo_rtv, one);
-	
+
+	float n = 1; float f = 300; 
 	if(invert_depth)
 	{
 		d3d.immediate_ctx->ClearDepthStencilView(d3d.dsv, D3D11_CLEAR_DEPTH, 0, 0);
@@ -393,7 +400,6 @@ void GfxDemo::frame()
 		); }
 	///////////////////////
 
-	float n = 1; float f = 300; 
 
 	if(invert_depth)
 	{
@@ -508,7 +514,7 @@ void GfxDemo::frame()
 	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eHorizontal, 5, debug_srv[0], debug_rtv[1]);
 	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
 
-
+	
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], d3d.depth_srv, noise, 
 		debug_srv[1], debug_srv[2], debug_rtv[1], debug_rtv[2],
 		d3d.back_buffer_rtv);
@@ -558,7 +564,22 @@ void GfxDemo::frame()
 		backbuffer_tex->Release();
 	}
 	debug_render_frame++;
-	int row = 1;
+
+	{
+		std::wstringstream ws;
+		ws << "frame time = " << frame_time;
+		drawtext->DrawString(
+			d3d.immediate_ctx,
+			ws.str().c_str(),// String
+			12,// Font size
+			10,// X position
+			window.size().cy - 20,// Y position
+			0xff0000ff,// Text color, 0xAaBbGgRr
+			FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
+			);
+	}
+
+	int row = 2;
 	for(auto it = gpu_env.gfx_profiler.blocks.begin(); it != gpu_env.gfx_profiler.blocks.end(); it++, row++ )
 	{
 		std::wstringstream ws;
@@ -566,10 +587,10 @@ void GfxDemo::frame()
 		drawtext->DrawString(
 			d3d.immediate_ctx,
 				ws.str().c_str(),// String
-				16,// Font size
-				40,// X position
-				window.size().cy - row * 40,// Y position
-				0xff0099ff,// Text color, 0xAaBbGgRr
+				12,// Font size
+				10,// X position
+				window.size().cy - row * 20,// Y position
+				0xff009933,// Text color, 0xAaBbGgRr
 				FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
 			);
 	}
@@ -577,6 +598,12 @@ void GfxDemo::frame()
 	d3d.swap_buffers();	
 
 	gpu_env.gfx_profiler.end_frame();
+
+	LARGE_INTEGER end;
+	QueryPerformanceCounter(&end);
+	LARGE_INTEGER freq;
+	QueryPerformanceFrequency(&freq);
+	frame_time = (double)(end.QuadPart - start.QuadPart) / freq.QuadPart * 1000;
 
 }
 

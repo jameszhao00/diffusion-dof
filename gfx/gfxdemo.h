@@ -90,4 +90,5 @@ struct GfxDemo
 	bool bilateral_z;
 
 	CComPtr<IFW1FontWrapper> drawtext;
+	double frame_time;
 };

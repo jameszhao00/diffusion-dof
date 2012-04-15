@@ -55,8 +55,8 @@ PS2GPU ps( VS2PS IN )
 	float3 color = 0;
 	float4 vs_light_pos = mul(g_view, float4(g_light_dir_ws.xyz, 1));
 	//int3 pix_coord = int3(IN.position.xy, 0);
-	float ndc_depth = g_depth.Load(coord, 0).x;
-	float3 vs_pos = get_vs_pos(IN.viewspace_ray, ndc_depth, g_proj_constants.xy);
+	float vs_z = g_depth.Load(coord, 0).x * Z_FAR;
+	float3 vs_pos = IN.viewspace_ray * vs_z;
 	float3 vs_light_dir = normalize(vs_light_pos.xyz - vs_pos);
 	float3 vs_dir = normalize(vs_pos);
 	//negate vs_dir so all dirs are coming out of the surface
@@ -71,9 +71,8 @@ PS2GPU ps( VS2PS IN )
 		float3 normal = normalize(g_normal.Load(coord, sample_i).xyz);
 		
 		float3 albedo = g_albedo.Load(coord, sample_i);
-		float depth = g_depth.Load(coord, sample_i);
 		
-		if(depth != DEPTH_MAX)
+		if(vs_z != Z_FAR)
 		{	
 			if(1)
 			{
