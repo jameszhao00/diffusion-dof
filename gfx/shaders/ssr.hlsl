@@ -186,13 +186,16 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float total_weights = 0;
-	float blur_distance = g_debug_vars[2];
+	//HAS TO BE INT!
+	//otherwise we avg sample_t, which IS INCORRECT
+	//testing all 4 samples used for the bilinear avg is too expensive ;(
+	int blur_distance = g_debug_vars[2];
 	float3 filtered = 0;
 	float blur_scale = 1;//clamp(sample0_t, 0,28) / 28;
 
-	for(int i = -3; i < 4; i++)
+	for(int i = -1; i < 2; i++)
 	{
-		for(int j = -3; j < 4; j++)
+		for(int j = -1; j < 2; j++)
 		{		
 			
 			float2 offset = float2(i, j) * blur_distance;
@@ -220,7 +223,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 			float range = exp(-diff*diff/9);
 			
 			float weight = gauss2d(abs(float2(i, j)), blur_scale * clamp(sample_t / 15, 0, 3));
-			
+			//weight = gauss2d(abs(float2(i, j)), 3);
 			if(g_vars[0] == 1) weight *= range;		
 
 			total_weights += weight;			
