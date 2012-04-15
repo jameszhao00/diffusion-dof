@@ -15,6 +15,22 @@ Texture2D<float4> g_samples : register(t[4]);
 #endif
 #define z_error_bounds 25
 #define base_increment 10
+
+static float poisson_12[] = {
+	0.4364348f, -0.8602998f,
+	-0.04865971f, -0.9352954f,
+	0.5893933f, -0.4072268f,
+	-0.3786264f, -0.4890129f,
+	0.1309691f, -0.1763052f,
+	0.04114918f, 0.4093734f,
+	0.5093402f, 0.1355669f,
+	-0.9850999f, -0.1390842f,
+	-0.4856647f, -0.03864777f,
+	-0.4714884f, 0.498933f,
+	0.164139f, 0.8786861f,
+	0.7568784f, 0.5255229f
+};
+
 cbuffer FSQuadCB : register(b[0])
 {	
 	float4x4 g_inv_p;
@@ -189,48 +205,59 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	//HAS TO BE INT!
 	//otherwise we avg sample_t, which IS INCORRECT
 	//testing all 4 samples used for the bilinear avg is too expensive ;(
-	int blur_distance = g_debug_vars[2];
+	float blur_distance = g_debug_vars[2];
 	float3 filtered = 0;
 	float blur_scale = 1;//clamp(sample0_t, 0,28) / 28;
 
-	for(int i = -1; i < 2; i++)
-	{
-		for(int j = -1; j < 2; j++)
-		{		
+	float rotation = (IN.position.y * vp_size.x + IN.position.x);
+	float rotation_s = sin(rotation);
+	float rotation_c = cos(rotation);
+
+	for(int i = 0; i < 12; i++)
+	{		
 			
-			float2 offset = float2(i, j) * blur_distance;
-			float4 sample = samples_tex.Sample(g_linear, uv + offset * pix_size_uv);
-			float sample_t = sample.w;
+		float2 poisson_pt = float2(poisson_12[2 * i], poisson_12[2 * i + 1]);	
 
-			//to fix blur edges where t is tiny and MAX_T is 3000...
-			//also tried straight up decreasing MAX_T... 
-			//think it sharpened the edges
-			if(sample_t == MAX_T) sample_t = sample0_t;
+		poisson_pt.x = poisson_pt.x * rotation_c - poisson_pt.y * rotation_s;
+		poisson_pt.y = poisson_pt.x * rotation_s + poisson_pt.y * rotation_c;
 
-			float3 color = sample.xyz;
 
-			float sample_z = unproject_z(g_depth.Load(float3(pix_coord + offset, 0)), g_proj_constants.xy);	
-			float3 sample_normal = g_normal.Load(float3(pix_coord + offset, 0));
-
-			//we want dot's range (-1, 1) to go to (0, 2)
-			float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
-			normal_diff *= 2;
+		float2 pix_offset = poisson_pt * blur_distance;
+		float2 uv_offset = pix_offset * pix_size_uv;
+		float4 sample = samples_tex.Sample(g_linear, uv + uv_offset);
 			
-			float z_diff = clamp(abs(sample_z - sample0_z) - 3, 0, 1000);
-			float diff = 10 * normal_diff + 2 * z_diff;			
+		//we cannot use bilinear sampled t
+		float sample_t = samples_tex.Load(float3(pix_coord + pix_offset, 0)).w;
+		//float sample_t = sample.w;
+
+		//to fix blur edges where t is tiny and MAX_T is 3000...
+		//also tried straight up decreasing MAX_T... 
+		//think it sharpened the edges
+		if(sample_t == MAX_T) sample_t = sample0_t;
+
+		float3 color = sample.xyz;
+
+		float sample_z = unproject_z(g_depth.Load(float3(pix_coord + pix_offset, 0)), g_proj_constants.xy);	
+		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0));
+
+		//we want dot's range (-1, 1) to go to (0, 2)
+		float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
+		normal_diff *= 2;
 			
-			//ideally we want to separate the diff out
-			float range = exp(-diff*diff/9);
+		float z_diff = clamp(abs(sample_z - sample0_z) - 3, 0, 1000);
+		float diff = 10 * normal_diff + 2 * z_diff;			
 			
-			float weight = gauss2d(abs(float2(i, j)), blur_scale * clamp(sample_t / 15, 0, 3));
-			//weight = gauss2d(abs(float2(i, j)), 3);
-			if(g_vars[0] == 1) weight *= range;		
+		//ideally we want to separate the diff out
+		float range = exp(-diff*diff/9);
+			
+		float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 30, 0, 3));
 
-			total_weights += weight;			
+		if(g_vars[0] == 1) weight *= range;		
 
-			filtered += weight * saturate(sample);
+		total_weights += weight;			
 
-		}
+		filtered += weight * saturate(sample);
+					
 	}
 
 	filtered /= total_weights;// == 0 ? 1 : total_weights;
