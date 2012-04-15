@@ -70,6 +70,7 @@ namespace fx
 		unsigned int zero;
 		CComPtr<Uniforms> fsquad_uniforms;
 
+		GfxProfiler gfx_profiler;
 		int vp_w, vp_h;
 	};
 
@@ -141,7 +142,7 @@ namespace fx
 		Resource* input,
 		Target* output);
 	void ssr(Gfx* gfx, 
-		const GpuEnvironment* gpu_env,
+		GpuEnvironment* gpu_env,
 		const SSRContext* fx_ctx,
 		Resource* normal,
 		Resource* color,

@@ -3,6 +3,7 @@
 #include "fbx.h"
 #include "package.h"
 #include <iostream>
+#include <sstream>
 using namespace std;
 
 //using namespace DirectX;
@@ -279,8 +280,12 @@ void GfxDemo::init(HINSTANCE instance)
 	d3d.device->CreateDepthStencilState(&ds_desc, &inverted_ds_state);
 	d3d::name(inverted_ds_state.p, "inverted ds");
     
+	IFW1Factory *drawtext_fac;
+	HRESULT hResult = FW1CreateFactory(FW1_VERSION, &drawtext_fac);
 
-	gfx_profiler.init(&d3d);
+	hResult = drawtext_fac->CreateFontWrapper(d3d.device, L"Arial", &drawtext);
+	drawtext_fac->Release();
+	
 }
 #include <iostream>
 float dt = 0;
@@ -301,7 +306,7 @@ void GfxDemo::frame()
 	normal_resource->GetDesc(&t2d_desc);
 	normal_resource->Release();
 
-	gfx_profiler.begin_frame();
+	gpu_env.gfx_profiler.begin_frame();
 
 	if((window.size().cx != t2d_desc.Width) || (window.size().cy != t2d_desc.Height))
 	{
@@ -461,7 +466,7 @@ void GfxDemo::frame()
 		nullptr,
 	};
 	d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, d3d.dsv);
-	
+	gpu_env.gfx_profiler.begin_block(L"gen gbuffer");
 	for(auto i = 0; i < package.meshes[0].mesh_parts.size(); i++)
 	{
 		int count =  package.meshes[0].mesh_parts.size();
@@ -484,14 +489,18 @@ void GfxDemo::frame()
 		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
 		d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
 	}
-	
+
+	gpu_env.gfx_profiler.end_block();
+
+	gpu_env.gfx_profiler.begin_block(L"shade gbuffer");
 	fx::shade_gbuffer(&d3d, &gpu_env, &shade_gbuffer_ctx, 
 		albedo_srv, 
 		normal_srv, 
 		d3d.depth_srv, 
 		&gbuffer_debug_cb_data, 
-		debug_rtv[0]);		
+		debug_rtv[0]);
 
+	gpu_env.gfx_profiler.end_block();
 	//d3d.immediate_ctx->GenerateMips(debug_srv[2]);
 
 	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
@@ -500,12 +509,9 @@ void GfxDemo::frame()
 	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
 
 
-	gfx_profiler.begin_block("ssr");
-
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], d3d.depth_srv, noise, 
 		debug_srv[1], debug_srv[2], debug_rtv[1], debug_rtv[2],
 		d3d.back_buffer_rtv);
-	gfx_profiler.end_block();
 	
 	/*
 	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
@@ -552,11 +558,25 @@ void GfxDemo::frame()
 		backbuffer_tex->Release();
 	}
 	debug_render_frame++;
+	int row = 1;
+	for(auto it = gpu_env.gfx_profiler.blocks.begin(); it != gpu_env.gfx_profiler.blocks.end(); it++, row++ )
+	{
+		std::wstringstream ws;
+		ws << it->first << " = " << it->second->ms;
+		drawtext->DrawString(
+			d3d.immediate_ctx,
+				ws.str().c_str(),// String
+				16,// Font size
+				40,// X position
+				window.size().cy - row * 40,// Y position
+				0xff0099ff,// Text color, 0xAaBbGgRr
+				FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
+			);
+	}
+	//d3d.immediate_ctx->GSSetShader(nullptr, nullptr, 0);
 	d3d.swap_buffers();	
 
-	gfx_profiler.end_frame();
-
-	std::cout<<"ssr time = " << gfx_profiler.blocks["ssr"].ms << endl;
+	gpu_env.gfx_profiler.end_frame();
 
 }
 

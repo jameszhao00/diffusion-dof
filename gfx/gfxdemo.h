@@ -8,6 +8,7 @@
 #include "fx.h"
 #include "fbx.h"
 
+#include "FW1FontWrapper.h"
 using namespace gfx;
 using namespace std;
 struct GfxDemo
@@ -87,5 +88,6 @@ struct GfxDemo
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;
 	bool bilateral_z;
-	GfxProfiler gfx_profiler;
+
+	CComPtr<IFW1FontWrapper> drawtext;
 };

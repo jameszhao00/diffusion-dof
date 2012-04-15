@@ -174,6 +174,7 @@ public:
 	void init(D3D* p_d3d)
 	{
 		frame_i = 0;
+		//blocks[L"a"] = nullptr;
 		d3d = p_d3d;
 
 		D3D11_QUERY_DESC disjoint_desc;
@@ -193,29 +194,31 @@ public:
 		{
 			for(int i = 0; i < frame_delay; i++)
 			{
-				(*it).second.start_time[i]->Release();
-				(*it).second.end_time[i]->Release();			
+				(*it).second->start_time[i]->Release();
+				(*it).second->end_time[i]->Release();			
 			}
+			delete (*it).second;
 		}
 	}
 	void begin_frame()
 	{
 		d3d->immediate_ctx->Begin(disjoint[frame_i % frame_delay]);
 	}
-	void begin_block(string name)
+	void begin_block(wstring name)
 	{
+		auto r = blocks.find(name);
 		if(blocks.find(name) == blocks.end())
 		{
 			blocks[name] = create_execution_block();
 		}
-		d3d->immediate_ctx->End(blocks[name].start_time[frame_i % frame_delay]);
+		d3d->immediate_ctx->End(blocks[name]->start_time[frame_i % frame_delay]);
 		current_block = name;
 	}
 	void end_block()
 	{
-		assert(current_block!="");
-		d3d->immediate_ctx->End(blocks[current_block].end_time[frame_i % frame_delay]);
-		current_block = "";
+		assert(current_block!=L"");
+		d3d->immediate_ctx->End(blocks[current_block]->end_time[frame_i % frame_delay]);
+		current_block = L"";
 	}
 	void end_frame()
 	{
@@ -232,10 +235,10 @@ public:
 			{
 				unsigned long long start; 
 				unsigned long long end;
-				d3d->immediate_ctx->GetData(it->second.start_time[target_frame_i], &start, sizeof(start), 0);
-				d3d->immediate_ctx->GetData(it->second.end_time[target_frame_i], &end, sizeof(end), 0);
+				d3d->immediate_ctx->GetData(it->second->start_time[target_frame_i], &start, sizeof(start), 0);
+				d3d->immediate_ctx->GetData(it->second->end_time[target_frame_i], &end, sizeof(end), 0);
 				
-				it->second.ms = (end - start)/freq * 1000;
+				it->second->ms = (end - start)/freq * 1000;
 			}
 		}
 
@@ -247,20 +250,20 @@ public:
 		ID3D11Query* end_time[frame_delay];
 		float ms;
 	};
-	hash_map<string, ExecutionBlock> blocks;
+	hash_map<wstring, ExecutionBlock*> blocks;
 private:
-	ExecutionBlock create_execution_block()
+	ExecutionBlock* create_execution_block()
 	{
-		ExecutionBlock eb;
+		ExecutionBlock* eb = new ExecutionBlock();
 		for(int i = 0; i < frame_delay; i++)
 		{
-			d3d->device->CreateQuery(&timestamp_desc, &eb.start_time[i]);
-			d3d->device->CreateQuery(&timestamp_desc, &eb.end_time[i]);			
+			d3d->device->CreateQuery(&timestamp_desc, &eb->start_time[i]);
+			d3d->device->CreateQuery(&timestamp_desc, &eb->end_time[i]);			
 		}
-		eb.ms = -1;
+		eb->ms = -1;
 		return eb;
 	}
-	string current_block;
+	wstring current_block;
 	ID3D11Query* disjoint[frame_delay];
 	int frame_i;
 	D3D* d3d;

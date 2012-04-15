@@ -83,7 +83,7 @@ namespace fx
 	}
 	void make_gpu_env(Gfx* gfx, GpuEnvironment* env)
 	{
-		zero(env);
+		env->gfx_profiler.init(gfx);
 
 		float default_blend_factors[4]; 
 		unsigned int default_blend_mask;
@@ -464,7 +464,7 @@ namespace fx
 
 	void ssr( 
 		Gfx* gfx, 
-		const GpuEnvironment* gpu_env, 
+		GpuEnvironment* gpu_env, 
 		const SSRContext* fx_ctx, 
 		Resource* normal, 
 		Resource* color, 
@@ -476,6 +476,7 @@ namespace fx
 		Target* scratch1_t,
 		Target* output )
 	{
+		gpu_env->gfx_profiler.begin_block(L"ssr pass 0");
 		{
 			//clear rtv/srv bindings
 			Target* targets[TARGETS_COUNT] = {};
@@ -504,6 +505,9 @@ namespace fx
 
 			gfx->immediate_ctx->Draw(6, 0);
 		}
+		gpu_env->gfx_profiler.end_block();
+
+		gpu_env->gfx_profiler.begin_block(L"ssr pass 1");
 		{
 			//clear rtv/srv bindings
 			Target* targets[TARGETS_COUNT] = {};
@@ -525,6 +529,7 @@ namespace fx
 			gfx->immediate_ctx->Draw(6, 0);
 		}
 
+		gpu_env->gfx_profiler.end_block();
 
 		
 	}
