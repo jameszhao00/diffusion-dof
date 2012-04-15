@@ -259,13 +259,9 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 		filtered += weight * saturate(sample);
 					
 	}
-
 	filtered /= total_weights;// == 0 ? 1 : total_weights;
 	float3 total = filtered;
-	//return sample0_t != MAX_T ? sample0_t / 30 : 0;
-	//return (total < 0).xyzz;
+
 	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + total.xyzz * 0.05;
 
-	//return .99 * g_color.Load(float3(pix_coord, 0)).xyzz + filtered.xyzz / total_weights * 0.01;// * BLUE;
-	//return .05 * filtered.xyzz / total_weights + .95 * g_color.Load(float3(pix_coord, 0)).xyzz;
 }

@@ -165,3 +165,104 @@ void D3D::sync_to_cbuffer(ID3D11Buffer * buffer, const T & data)
 	memcpy(mapped_resource.pData, &data, sizeof(T));
 	immediate_ctx->Unmap(buffer, 0);
 }
+
+const int frame_delay = 15;
+//idea from mjp's blog 
+class GfxProfiler
+{
+public:
+	void init(D3D* p_d3d)
+	{
+		frame_i = 0;
+		d3d = p_d3d;
+
+		D3D11_QUERY_DESC disjoint_desc;
+		disjoint_desc.MiscFlags = 0;
+		disjoint_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+
+		for(int i = 0; i < frame_delay; i++) 
+		{
+			d3d->device->CreateQuery(&disjoint_desc, &disjoint[i]);
+		}
+		timestamp_desc.MiscFlags = 0; timestamp_desc.Query = D3D11_QUERY_TIMESTAMP;
+	}
+	void destroy()
+	{
+		for(int i = 0; i < frame_delay; i++) disjoint[i]->Release();
+		for(auto it = blocks.begin(); it != blocks.end(); it++)
+		{
+			for(int i = 0; i < frame_delay; i++)
+			{
+				(*it).second.start_time[i]->Release();
+				(*it).second.end_time[i]->Release();			
+			}
+		}
+	}
+	void begin_frame()
+	{
+		d3d->immediate_ctx->Begin(disjoint[frame_i % frame_delay]);
+	}
+	void begin_block(string name)
+	{
+		if(blocks.find(name) == blocks.end())
+		{
+			blocks[name] = create_execution_block();
+		}
+		d3d->immediate_ctx->End(blocks[name].start_time[frame_i % frame_delay]);
+		current_block = name;
+	}
+	void end_block()
+	{
+		assert(current_block!="");
+		d3d->immediate_ctx->End(blocks[current_block].end_time[frame_i % frame_delay]);
+		current_block = "";
+	}
+	void end_frame()
+	{
+		//end the current frame's disjoint
+		d3d->immediate_ctx->End(disjoint[frame_i % frame_delay]);
+		//update all profile blocks
+		int target_frame_i = (frame_i + 1) % frame_delay;
+		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint_data;
+		d3d->immediate_ctx->GetData(disjoint[target_frame_i], &disjoint_data, sizeof(disjoint_data), 0);
+		if(disjoint_data.Disjoint == false)
+		{
+			float freq = disjoint_data.Frequency;
+			for(auto it = blocks.begin(); it != blocks.end(); it++)
+			{
+				unsigned long long start; 
+				unsigned long long end;
+				d3d->immediate_ctx->GetData(it->second.start_time[target_frame_i], &start, sizeof(start), 0);
+				d3d->immediate_ctx->GetData(it->second.end_time[target_frame_i], &end, sizeof(end), 0);
+				
+				it->second.ms = (end - start)/freq * 1000;
+			}
+		}
+
+		frame_i++;
+	}
+	struct ExecutionBlock
+	{
+		ID3D11Query* start_time[frame_delay];
+		ID3D11Query* end_time[frame_delay];
+		float ms;
+	};
+	hash_map<string, ExecutionBlock> blocks;
+private:
+	ExecutionBlock create_execution_block()
+	{
+		ExecutionBlock eb;
+		for(int i = 0; i < frame_delay; i++)
+		{
+			d3d->device->CreateQuery(&timestamp_desc, &eb.start_time[i]);
+			d3d->device->CreateQuery(&timestamp_desc, &eb.end_time[i]);			
+		}
+		eb.ms = -1;
+		return eb;
+	}
+	string current_block;
+	ID3D11Query* disjoint[frame_delay];
+	int frame_i;
+	D3D* d3d;
+	D3D11_QUERY_DESC timestamp_desc;
+};

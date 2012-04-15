@@ -279,6 +279,8 @@ void GfxDemo::init(HINSTANCE instance)
 	d3d.device->CreateDepthStencilState(&ds_desc, &inverted_ds_state);
 	d3d::name(inverted_ds_state.p, "inverted ds");
     
+
+	gfx_profiler.init(&d3d);
 }
 #include <iostream>
 float dt = 0;
@@ -298,6 +300,9 @@ void GfxDemo::frame()
 	normal_srv->GetResource((ID3D11Resource**)&normal_resource);
 	normal_resource->GetDesc(&t2d_desc);
 	normal_resource->Release();
+
+	gfx_profiler.begin_frame();
+
 	if((window.size().cx != t2d_desc.Width) || (window.size().cy != t2d_desc.Height))
 	{
 		//recreate everything
@@ -491,12 +496,16 @@ void GfxDemo::frame()
 
 	d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
 	d3d.immediate_ctx->PSSetSamplers(1, 1, &gpu_env.aniso_sampler.p);
-	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eHorizontal, 5, debug_srv[0], debug_rtv[1]);
-	fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
+	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eHorizontal, 5, debug_srv[0], debug_rtv[1]);
+	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
+
+
+	gfx_profiler.begin_block("ssr");
 
 	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], d3d.depth_srv, noise, 
 		debug_srv[1], debug_srv[2], debug_rtv[1], debug_rtv[2],
 		d3d.back_buffer_rtv);
+	gfx_profiler.end_block();
 	
 	/*
 	fx::luminance(&d3d, &gpu_env, &fx_env.luminance_ctx, debug_srv[0],  debug_rtv[2]);
@@ -544,6 +553,11 @@ void GfxDemo::frame()
 	}
 	debug_render_frame++;
 	d3d.swap_buffers();	
+
+	gfx_profiler.end_frame();
+
+	std::cout<<"ssr time = " << gfx_profiler.blocks["ssr"].ms << endl;
+
 }
 
 void GfxDemo::load_models()

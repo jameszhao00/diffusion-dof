@@ -87,4 +87,5 @@ struct GfxDemo
 	vector<asset::fbx::Camera> cameras;
 	int camera_i;
 	bool bilateral_z;
+	GfxProfiler gfx_profiler;
 };
