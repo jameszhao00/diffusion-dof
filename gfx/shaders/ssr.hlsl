@@ -191,7 +191,7 @@ float gauss2d(float2 dp, float sigma)
 	return exp(-dot(dp, dp)/(sigma * sigma));
 }
 float4 shade_ps(VS2PS IN) : SV_TARGET
-{	
+{
 	uint2 vp_size;
 	g_normal.GetDimensions(vp_size.x, vp_size.y);
 	float2 pix_coord = IN.position.xy;
@@ -202,9 +202,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float4 sample0 = samples_tex.Sample(g_linear, uv);
 	float3 sample0_color = sample0.xyz;
 	float sample0_t = sample0.w;
-	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
-
-	return sample0.xyzz;
+	float sample0_z = g_depth.Load(float3(pix_coord, 0)) * Z_FAR;
 
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float total_weights = 0;
@@ -242,7 +240,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 		float3 color = sample.xyz;
 
-		float sample_z = unproject_z(g_depth.Load(float3(pix_coord + pix_offset, 0)), g_proj_constants.xy);	
+		float sample_z = g_depth.Load(float3(pix_coord + pix_offset, 0)) * Z_FAR;
 		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0));
 
 		//we want dot's range (-1, 1) to go to (0, 2)
@@ -266,7 +264,6 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	}
 	filtered /= total_weights;// == 0 ? 1 : total_weights;
 	float3 total = filtered;
-
 	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + total.xyzz * 0.05;
 
 }
