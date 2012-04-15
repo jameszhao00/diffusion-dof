@@ -73,7 +73,12 @@ float2 vp_to_uv(float2 vp_size, float2 p)
 {
 	return p / vp_size;
 }
-
+float3 vs_to_ndc(float3 vs_pos, float4x4 proj)
+{
+	float4 r = mul(float4(vs_pos, 1), proj);
+	float3 ndc = r.xyz / r.w;
+	return ndc;
+}
 float2 vs_to_vp(float3 vs_pos, float2 vp_size, float4x4 proj)
 {
 	float4 r = mul(float4(vs_pos, 1), proj);

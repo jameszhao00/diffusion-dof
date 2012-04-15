@@ -69,89 +69,41 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 	target_t = -1;
 	float2 r_ss = normalize(vs_to_vp(pos_vs + r_vs, vp_size, g_proj) - pix_coord);
 	
-	float4 result = 0;
+	float z0 = pos_vs.z;
+
+	float2 p0_vp = pix_coord;
+	float2 p1_vp = p0_vp + 400 * r_ss;
 	
-	float2 s_pos_ss = pix_coord.xy;
+	float z1 = (r_vs.z * vpy_to_t(p1_vp.y, half_cot_fov, vp_size, pos_vs, r_vs) + pos_vs.z);
 
-	float2 target_vp = -1;
-	float min_t = 0;
-	float2 min_pos_vp = s_pos_ss;
-	float max_t = -1;
-	float2 max_pos_vp = -1;
-	bool detailed_search = false;
-	for(int i = 0; i < 800 / base_increment; i++)
-	{
-		s_pos_ss += base_increment * (r_ss);
-		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
+	float z0_rcp = 1/z0;
+	float z1_rcp = 1/z1;
 
-		//8 ms
-		float t = vpy_to_t(s_pos_ss.y, half_cot_fov, vp_size, pos_vs, r_vs);
-		//cap ray walk dist
-		if(t > 100) break;
-		max_t = t;
-		max_pos_vp = s_pos_ss;
+	float increment = 0.06;
+	float2 pos_vp_increment = (p1_vp - p0_vp) * increment;
+	float ray_z_rcp_increment = (z1_rcp - z0_rcp) * increment;
 
-		//8 ms
-		float s_desired_z = r_vs.z * t + pos_vs.z;
+	float2 sample_pos_vp = p0_vp + pos_vp_increment / 4;
+	float2 ray_z_rcp = z0_rcp + ray_z_rcp_increment / 4;
 
-		//15 ms
-		float s_actual_z = g_depth.Load(int3(s_pos_ss, 0)) * Z_FAR;
-		
-		if(abs(s_actual_z - s_desired_z) < 0.0001)
+	for(int i = 0; i < 33; i += 1)
+	{		
+		float actual_z = g_depth.Load(float3(sample_pos_vp, 0)).x * Z_FAR;
+		float ray_z = rcp(ray_z_rcp);
+		float z_error = actual_z - ray_z;
+		if(actual_z < ray_z && abs(actual_z - ray_z) < 10) 
 		{
-			target_vp = s_pos_ss;
+			//incorrect... should be in ray space
+			target_t = 10;//i;
+			return sample_pos_vp;
 		}
-		else if(closer_ndc(s_actual_z, s_desired_z))
-		{			
-			detailed_search = true;
-			break;
-		}
-		min_t = max_t;
-		min_pos_vp = max_pos_vp;
+		//don't need abs since actual_z will always be greater than ray_z to get this far
+		float z_scale = clamp(z_error / 10, 0.1, 1);
+		sample_pos_vp += pos_vp_increment * z_scale;
+		ray_z_rcp += ray_z_rcp_increment * z_scale;
 	}
-	//target_t = detailed_search == true; return 0;
-	//22 ms
-	if(detailed_search)
-	{
-		s_pos_ss = min_pos_vp - r_ss * 2;
-		max_t += 2;
-		float previous_t = min_t;
-		float previous_z_error = 1000;
-		float previous_z = 0;
-		for(int i = 0; i < 500; i++)
-		{
-			s_pos_ss += 2 * r_ss;
-			float t = vpy_to_t(s_pos_ss.yy, half_cot_fov, vp_size, pos_vs, r_vs);
-			if(t > max_t) break; 
-			float s_desired_z = r_vs.z * t + pos_vs.z;
-			
-			float s_actual_z = g_depth.Load(int3(s_pos_ss, 0)) * Z_FAR;
-			float z_error = s_actual_z - s_desired_z;
-
-			if((previous_z_error > 0) && (z_error < 0) && abs(s_desired_z - s_actual_z) < 0.8)
-			{
-				//we've crossed the boundary
-
-				float3 previous_ray_pos_vs = pos_vs + previous_t * r_vs;
-				float3 current_ray_pos_vs = pos_vs + t * r_vs;
-
-				float error_ratio = abs(previous_z - previous_ray_pos_vs.z) / 
-					(abs(previous_z - previous_ray_pos_vs.z) + abs(s_actual_z - current_ray_pos_vs.z));
-
-				float3 interpolated_sample_pos_vs = lerp(previous_ray_pos_vs, current_ray_pos_vs, error_ratio);
-				float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
-
-				target_vp = interpolated_sample_pos_vp;
-				target_t = t;
-				break;
-			}
-			
-			previous_z_error = z_error;
-			previous_t = t;
-			previous_z = s_actual_z;
-		}
-	}
-	return target_vp;
+	return 0;
+	
 }
 float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 {
@@ -175,9 +127,10 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 
 	float target_t;
 	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
-
+	//return target_vp.x;
 	if(target_t != -1)
 	{
+		//return RED;
 		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
 	}
 	else return float4(0, 0, 0, MAX_T);
@@ -203,7 +156,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float3 sample0_color = sample0.xyz;
 	float sample0_t = sample0.w;
 	float sample0_z = g_depth.Load(float3(pix_coord, 0)) * Z_FAR;
-
+	//return sample0;
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float total_weights = 0;
 	//HAS TO BE INT!
