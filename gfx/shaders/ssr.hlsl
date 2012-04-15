@@ -14,7 +14,6 @@ Texture2D<float3> g_noise: register(t[3]);
 Texture2D<float4> g_samples : register(t[4]);
 #endif
 #define z_error_bounds 25
-#define base_increment 10
 
 static float poisson_12[] = {
 	0.4364348f, -0.8602998f,
@@ -64,95 +63,7 @@ float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, flo
 			(2 * vpy * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);	
 }
 #define MAX_T 3000
-float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, out float target_t)
-{	
-	target_t = -1;
-	float2 r_ss = normalize(vs_to_vp(pos_vs + r_vs, vp_size, g_proj) - pix_coord);
-	
-	float4 result = 0;
-	
-	float2 s_pos_ss = pix_coord.xy;
 
-	float2 target_vp = -1;
-	float min_t = 0;
-	float2 min_pos_vp = s_pos_ss;
-	float max_t = -1;
-	float2 max_pos_vp = -1;
-	bool detailed_search = false;
-	for(int i = 0; i < 800 / base_increment; i++)
-	{
-		s_pos_ss += base_increment * (r_ss);
-		if(!in_vp_bounds(s_pos_ss, vp_size)) break;
-
-		//8 ms
-		float t = vpy_to_t(s_pos_ss.y, half_cot_fov, vp_size, pos_vs, r_vs);
-		//cap ray walk dist
-		if(t > 100) break;
-		max_t = t;
-		max_pos_vp = s_pos_ss;
-
-		//8 ms
-		float s_desired_z = r_vs.z * t + pos_vs.z;
-
-		//15 ms
-		float s_actual_z = g_depth.Load(int3(s_pos_ss, 0)) * Z_FAR;
-		
-		if(abs(s_actual_z - s_desired_z) < 0.0001)
-		{
-			target_vp = s_pos_ss;
-		}
-		else if(closer_ndc(s_actual_z, s_desired_z))
-		{			
-			detailed_search = true;
-			break;
-		}
-		min_t = max_t;
-		min_pos_vp = max_pos_vp;
-	}
-	//target_t = detailed_search == true; return 0;
-	//22 ms
-	if(detailed_search)
-	{
-		s_pos_ss = min_pos_vp - r_ss * 2;
-		max_t += 2;
-		float previous_t = min_t;
-		float previous_z_error = 1000;
-		float previous_z = 0;
-		for(int i = 0; i < 500; i++)
-		{
-			s_pos_ss += 2 * r_ss;
-			float t = vpy_to_t(s_pos_ss.yy, half_cot_fov, vp_size, pos_vs, r_vs);
-			if(t > max_t) break; 
-			float s_desired_z = r_vs.z * t + pos_vs.z;
-			
-			float s_actual_z = g_depth.Load(int3(s_pos_ss, 0)) * Z_FAR;
-			float z_error = s_actual_z - s_desired_z;
-
-			if((previous_z_error > 0) && (z_error < 0) && abs(s_desired_z - s_actual_z) < 0.8)
-			{
-				//we've crossed the boundary
-
-				float3 previous_ray_pos_vs = pos_vs + previous_t * r_vs;
-				float3 current_ray_pos_vs = pos_vs + t * r_vs;
-
-				float error_ratio = abs(previous_z - previous_ray_pos_vs.z) / 
-					(abs(previous_z - previous_ray_pos_vs.z) + abs(s_actual_z - current_ray_pos_vs.z));
-
-				float3 interpolated_sample_pos_vs = lerp(previous_ray_pos_vs, current_ray_pos_vs, error_ratio);
-				float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
-
-				target_vp = interpolated_sample_pos_vp;
-				target_t = t;
-				break;
-			}
-			
-			previous_z_error = z_error;
-			previous_t = t;
-			previous_z = s_actual_z;
-		}
-	}
-	return target_vp;
-}
 float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 {
 	uint2 vp_size;
@@ -167,20 +78,104 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 n_vs = normalize(g_normal.Load(pix_coord, 0).xyz);
 
 	float3 r_vs = reflect(dir_vs, n_vs);
-	float half_cot_fov = g_debug_vars[0];
+
 	float4 reflection_color = 0;
 	float noise_intensity = g_debug_vars[3];//0.09;
 	float3 noise = noise_intensity * normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz - 0.5);
 	r_vs = normalize(r_vs + noise);
-
-	float target_t;
-	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
-
-	if(target_t != -1)
+	
+	float4 invalid = float4(0, 0, 0, MAX_T);
+	float target_t = -1;
+	float2 target_vp = -1;
 	{
+		//raytrace
+		float3 sample_pos = pos_vs;
+		float start_t = .5;
+		float end_t = 101;
+		float t_increment = 5;
+		for(int i = 0; i < 4; i++)
+		{
+			for(float t = start_t; t < end_t; t += t_increment)
+			{
+				float3 sample_pos = pos_vs + t * r_vs;
+
+				float2 sample_pos_ss = vs_to_vp(sample_pos, vp_size, g_proj);
+				if(!in_vp_bounds(sample_pos_ss, vp_size)) return invalid;
+
+				float actual_z = g_depth.Load(int3(sample_pos_ss, 0)) * Z_FAR;
+				float desired_z = sample_pos.z;
+				float z_error = actual_z - desired_z;
+
+				if(closer_ndc(actual_z, desired_z) && abs(z_error) < t_increment)
+				{			
+					start_t = max(t - t_increment - 0.5, start_t);
+					end_t = t + 0.5;
+					target_vp = sample_pos_ss;
+					t_increment = t_increment / 10;		
+					break;
+				}
+			}
+		}
+		//return abs(start_t - end_t) / 10;
+		target_t = end_t;
+
+
+		/*
+		float previous_z_error = 0;
+		float previous_t = 0;
+		float previous_z = 0;
+		for(int i = 0; i < 30; i++)
+		{
+			float t = previous_t + 3;
+			float3 sample_pos = pos_vs + t * r_vs;
+
+			float2 sample_pos_ss = vs_to_vp(sample_pos, vp_size, g_proj);	
+
+			if(!in_vp_bounds(sample_pos_ss, vp_size)) break;		
+
+			float actual_z = g_depth.Load(int3(sample_pos_ss, 0)) * Z_FAR;
+			float desired_z = sample_pos.z;
+			float z_error = actual_z - desired_z;
+
+			if(closer_ndc(actual_z, desired_z) && abs(z_error) < 5)
+			{					
+				float3 previous_ray_pos_vs = pos_vs + previous_t * r_vs;
+				float3 current_ray_pos_vs = pos_vs + t * r_vs;
+
+				float error_ratio = abs(previous_z_error) / (abs(previous_z_error) + abs(z_error));
+
+				float3 interpolated_sample_pos_vs = lerp(previous_ray_pos_vs, current_ray_pos_vs, error_ratio);
+				float2 interpolated_sample_pos_vp = vs_to_vp(interpolated_sample_pos_vs, vp_size, g_proj);
+
+				target_vp = interpolated_sample_pos_vp;
+				target_t = t;
+
+				break;
+			}
+
+			previous_z_error = z_error;
+			previous_t = t;
+			previous_z = actual_z;
+		}
+		*/
+	}
+	if(target_vp.x != -1 && target_vp.y != -1)
+	{
+		float3 target_normal = normalize(g_normal.Load(float3(target_vp, 0)).xyz);
+		if(dot(-target_normal, dir_vs) < 0.2)
+		{
+			return invalid;//RED + GREEN;//RED;//float4(0, 0, 0, MAX_T);
+		}
+		if(dot(-target_normal, r_vs) < 0.2)
+		{
+			return invalid;//GREEN;//float4(0, 0, 0, MAX_T);
+		}
+		if(dot(dir_vs, r_vs) < -0.3) return invalid;//RED;
+		//return target_t / 30;
+
 		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
 	}
-	else return float4(0, 0, 0, MAX_T);
+	else return invalid;//BLUE;//float4(0, 0, 0, MAX_T);
 }
 float gauss(float x, float sigma)
 {
@@ -202,10 +197,8 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float4 sample0 = samples_tex.Sample(g_linear, uv);
 	float3 sample0_color = sample0.xyz;
 	float sample0_t = sample0.w;
-	float sample0_z = unproject_z(g_depth.Load(float3(pix_coord, 0)), g_proj_constants);
-
-	return sample0.xyzz;
-
+	float sample0_z = g_depth.Load(float3(pix_coord, 0)) * Z_FAR;
+	return sample0_color.xyzz;
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float total_weights = 0;
 	//HAS TO BE INT!
@@ -242,7 +235,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 		float3 color = sample.xyz;
 
-		float sample_z = unproject_z(g_depth.Load(float3(pix_coord + pix_offset, 0)), g_proj_constants.xy);	
+		float sample_z = g_depth.Load(float3(pix_coord + pix_offset, 0)) * Z_FAR;
 		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0));
 
 		//we want dot's range (-1, 1) to go to (0, 2)
