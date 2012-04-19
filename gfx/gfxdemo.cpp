@@ -88,6 +88,13 @@ void GfxDemo::init_gbuffers(int w, int h)
 	desc.MipLevels = 0;
 	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 	d3d.device->CreateTexture2D(&desc, nullptr, &debug[2]);
+	desc.MipLevels = 0;
+	
+	desc.Format = DXGI_FORMAT_R32_FLOAT;
+	desc.MipLevels = 0;
+	desc.MiscFlags = 0;
+	d3d.device->CreateTexture2D(&desc, nullptr, &debug[3]);
+
 	//DEBUG[1, 2] is NOT MSAA
 	//debug 0 is msaa 
 	//debug 1 is no msaa
@@ -99,17 +106,20 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d::name(debug[0].p, "debug 0");
 	d3d::name(debug[1].p, "debug 1");
 	d3d::name(debug[2].p, "debug 2");
+	d3d::name(debug[3].p, "debug 3");
 
 	d3d.device->CreateRenderTargetView(normal, nullptr, &normal_rtv);
 	d3d.device->CreateRenderTargetView(albedo, nullptr, &albedo_rtv);
 	d3d.device->CreateRenderTargetView(debug[0], nullptr, &debug_rtv[0]);
 	d3d.device->CreateRenderTargetView(debug[1], nullptr, &debug_rtv[1]);
 	d3d.device->CreateRenderTargetView(debug[2], nullptr, &debug_rtv[2]);
+	d3d.device->CreateRenderTargetView(debug[3], nullptr, &debug_rtv[3]);
 
 	d3d.device->CreateShaderResourceView(normal, nullptr, &normal_srv);
 	d3d.device->CreateShaderResourceView(albedo, nullptr, &albedo_srv);
 	d3d.device->CreateShaderResourceView(debug[0], nullptr, &debug_srv[0]);
 	d3d.device->CreateShaderResourceView(debug[1], nullptr, &debug_srv[1]);
+	d3d.device->CreateShaderResourceView(debug[3], nullptr, &debug_srv[3]);
 	//debug 2 needs mip support
 	CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
 	srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -124,11 +134,13 @@ void GfxDemo::init_gbuffers(int w, int h)
 	d3d::name(debug_rtv[0].p, "debug");
 	d3d::name(debug_rtv[1].p, "debug");
 	d3d::name(debug_rtv[2].p, "debug");
+	d3d::name(debug_rtv[3].p, "debug");
 	d3d::name(normal_srv.p, "normal");
 	d3d::name(albedo_srv.p, "albedo");
 	d3d::name(debug_srv[0].p, "debug");
 	d3d::name(debug_srv[1].p, "debug");
 	d3d::name(debug_srv[2].p, "debug");
+	d3d::name(debug_srv[3].p, "debug");
 }
 void TW_CALL CopyCDStringToClient(char **destPtr, const char *src)
 {
@@ -322,6 +334,7 @@ void GfxDemo::frame()
 		resize(&debug_rtv[0].p, &(debug_srv[0].p), &debug[0].p, d3d.device, window.size().cx, window.size().cy);
 		resize(&debug_rtv[1].p, &(debug_srv[1].p), &debug[1].p, d3d.device, window.size().cx, window.size().cy);
 		resize(&debug_rtv[2].p, &(debug_srv[2].p), &debug[2].p, d3d.device, window.size().cx, window.size().cy);
+		resize(&debug_rtv[3].p, &(debug_srv[3].p), &debug[3].p, d3d.device, window.size().cx, window.size().cy);
 		
 	}
 	gpu_env.vp_w = window.size().cx;
@@ -334,14 +347,14 @@ void GfxDemo::frame()
 	d3d.immediate_ctx->ClearRenderTargetView(debug_rtv[0], color);
 	d3d.immediate_ctx->ClearRenderTargetView(debug_rtv[1], color);
 	d3d.immediate_ctx->ClearRenderTargetView(debug_rtv[2], color);
+	d3d.immediate_ctx->ClearRenderTargetView(debug_rtv[3], one);
 	d3d.immediate_ctx->ClearRenderTargetView(normal_rtv, color);
 	d3d.immediate_ctx->ClearRenderTargetView(albedo_rtv, one);
 
 	float n = 1; float f = 300; 
 	if(invert_depth)
 	{
-		d3d.immediate_ctx->ClearDepthStencilView(d3d.dsv, D3D11_CLEAR_DEPTH, 0, 0);
-		
+		d3d.immediate_ctx->ClearDepthStencilView(d3d.dsv, D3D11_CLEAR_DEPTH, 0, 0);		
 		d3d.immediate_ctx->OMSetDepthStencilState(inverted_ds_state, 0);
 	}
 	else
@@ -467,7 +480,7 @@ void GfxDemo::frame()
 		normal_rtv, 
 		albedo_rtv, 
 		debug_rtv[0], 
-		nullptr,
+		debug_rtv[3], 
 		nullptr,
 		nullptr,
 	};
@@ -502,7 +515,7 @@ void GfxDemo::frame()
 	fx::shade_gbuffer(&d3d, &gpu_env, &shade_gbuffer_ctx, 
 		albedo_srv, 
 		normal_srv, 
-		d3d.depth_srv, 
+		debug_srv[3], 
 		&gbuffer_debug_cb_data, 
 		debug_rtv[0]);
 
@@ -515,7 +528,7 @@ void GfxDemo::frame()
 	//fx::blur(&d3d, &gpu_env, &fx_env.blur_ctx, fx::eVertical, 5, debug_srv[1], debug_rtv[2]);
 
 	
-	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], d3d.depth_srv, noise, 
+	fx::ssr(&d3d, &gpu_env, &ssr_ctx, normal_srv, debug_srv[0], debug_srv[3], noise, 
 		debug_srv[1], debug_srv[2], debug_rtv[1], debug_rtv[2],
 		d3d.back_buffer_rtv);
 	

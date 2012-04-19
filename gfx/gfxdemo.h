@@ -47,9 +47,9 @@ struct GfxDemo
 	CComPtr<ID3D11RenderTargetView> albedo_rtv;
 	CComPtr<ID3D11Texture2D> albedo;
 	//ID3D11Texture2D* debug;
-	CComPtr<ID3D11ShaderResourceView> debug_srv[3];
-	CComPtr<ID3D11RenderTargetView> debug_rtv[3];
-	CComPtr<ID3D11Texture2D> debug[3];
+	CComPtr<ID3D11ShaderResourceView> debug_srv[4];
+	CComPtr<ID3D11RenderTargetView> debug_rtv[4];
+	CComPtr<ID3D11Texture2D> debug[4];
 	
 	CComPtr<ID3D11DepthStencilState> ds_state; 
 	CComPtr<ID3D11DepthStencilState> inverted_ds_state; 

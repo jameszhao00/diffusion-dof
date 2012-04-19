@@ -117,7 +117,7 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 pix_coord = float3(IN.position.xy, 0);
 
 	float z_vs = g_depth.Load(pix_coord, 0) * Z_FAR;
-
+	//return z_vs / 100;
 	if(z_vs == Z_FAR) return float4(0, 0, 0, MAX_T);
 
 	float3 dir_vs = normalize(IN.viewspace_ray);

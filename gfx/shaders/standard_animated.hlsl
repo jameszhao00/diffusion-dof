@@ -35,7 +35,7 @@ struct PS_OUT
 	float4 normal : SV_TARGET0;
 	float3 albedo : SV_TARGET1;
 	float4 debug : SV_TARGET2;
-	float depth : SV_DEPTH;
+	float depth : SV_TARGET3;
 };
 VS2PS vs(App2VS IN)
 {

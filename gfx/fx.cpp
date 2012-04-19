@@ -487,6 +487,7 @@ namespace fx
 
 		{
 			Target* targets[TARGETS_COUNT] = {scratch0_t};
+			//Target* targets[TARGETS_COUNT] = {output};
 			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise};
 			Uniforms* uniforms[UNIFORMS_COUNT] = {gpu_env->fsquad_uniforms};
 
@@ -506,8 +507,9 @@ namespace fx
 			gfx->immediate_ctx->Draw(6, 0);
 		}
 		gpu_env->gfx_profiler.end_block();
-
+		
 		gpu_env->gfx_profiler.begin_block(L"ssr pass 1");
+		if(1)
 		{
 			//clear rtv/srv bindings
 			Target* targets[TARGETS_COUNT] = {};
@@ -515,8 +517,8 @@ namespace fx
 			gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 			gfx->immediate_ctx->PSSetShaderResources(0, RESOURCES_COUNT, resources);
 		}
-
-
+		
+		if(1)
 		{
 			Target* targets[TARGETS_COUNT] = {output};
 			Resource* resources[RESOURCES_COUNT] = {normal, color, depth, noise, scratch0_r};
