@@ -109,8 +109,10 @@ void D3D::init(Window & window)
 {
 	swap_chain_desc = make_swap_chain_desc(window);
 
+	D3D_FEATURE_LEVEL features[] = {D3D_FEATURE_LEVEL_10_0};
+
 	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_RLDO_DETAIL, 
-									NULL, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
+									features, 1, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
 									&device.p, NULL, &immediate_ctx.p);
 		
 	window.resize_callback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
@@ -238,12 +240,12 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 	ID3D11InputLayout** il ,
 	gfx::VertexTypes type)
 {
-	auto vs_blob = d3d::load_shader(file, "vs", "vs_5_0");	
+	auto vs_blob = d3d::load_shader(file, "vs", "vs_4_0");	
 	auto l = vs_blob->GetBufferSize();
 	device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, vs);
 	
 	d3d::name(*vs, file);
-	auto ps_blob = d3d::load_shader(file, "ps", "ps_5_0");
+	auto ps_blob = d3d::load_shader(file, "ps", "ps_4_0");
 	device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, ps);
 	
 	d3d::name(*ps, file);

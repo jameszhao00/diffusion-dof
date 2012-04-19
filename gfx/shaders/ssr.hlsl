@@ -67,38 +67,42 @@ float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, flo
 float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, out float target_t)
 {	
 	target_t = -1;
-	float2 r_ss = normalize(vs_to_vp(pos_vs + r_vs, vp_size, g_proj) - pix_coord);
+	float2 r_ss = normalize(vs_to_vp(pos_vs + 50 * r_vs, vp_size, g_proj) - pix_coord);
+	
+	float2 p0_vp = pix_coord;
+	//float2 p1_vp = p0_vp + 400 * r_ss;
+	float2 p1_vp = vs_to_vp(pos_vs + 40 * r_vs, vp_size, g_proj);
 	
 	float z0 = pos_vs.z;
-
-	float2 p0_vp = pix_coord;
-	float2 p1_vp = p0_vp + 400 * r_ss;
-	
-	float z1 = (r_vs.z * vpy_to_t(p1_vp.y, half_cot_fov, vp_size, pos_vs, r_vs) + pos_vs.z);
-
+	//float end_t = vpy_to_t(p1_vp.y, half_cot_fov, vp_size, pos_vs, r_vs);
+	//float z1 = (r_vs.z * end_t + pos_vs.z);
+	float z1 = (pos_vs + 40 * r_vs).z;
 	float z0_rcp = 1/z0;
 	float z1_rcp = 1/z1;
 
-	float increment = 0.06;
+	float increment = 0.08;
+	float base = 0.02;
 	float2 pos_vp_increment = (p1_vp - p0_vp) * increment;
 	float ray_z_rcp_increment = (z1_rcp - z0_rcp) * increment;
 
-	float2 sample_pos_vp = p0_vp + pos_vp_increment / 4;
-	float2 ray_z_rcp = z0_rcp + ray_z_rcp_increment / 4;
+	float2 sample_pos_vp = p0_vp + pos_vp_increment * (base / increment);
+	float2 ray_z_rcp = z0_rcp + ray_z_rcp_increment * (base / increment);
+	
 
 	for(int i = 0; i < 33; i += 1)
 	{		
 		float actual_z = g_depth.Load(float3(sample_pos_vp, 0)).x * Z_FAR;
 		float ray_z = rcp(ray_z_rcp);
 		float z_error = actual_z - ray_z;
-		if(actual_z < ray_z && abs(actual_z - ray_z) < 10) 
+		if(actual_z < ray_z && abs(actual_z - ray_z) < 5) 
 		{
-			//incorrect... should be in ray space
-			target_t = 10;//i;
+			
+			float3 final_pos = pos_vs + r_vs * vpy_to_t(sample_pos_vp.y, half_cot_fov, vp_size, pos_vs, r_vs);
+			target_t = length(final_pos.xyz - pos_vs);
 			return sample_pos_vp;
 		}
 		//don't need abs since actual_z will always be greater than ray_z to get this far
-		float z_scale = clamp(z_error / 10, 0.1, 1);
+		float z_scale = clamp(z_error / 5, 0.4, 1);
 		sample_pos_vp += pos_vp_increment * z_scale;
 		ray_z_rcp += ray_z_rcp_increment * z_scale;
 	}
@@ -113,6 +117,9 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	float3 pix_coord = float3(IN.position.xy, 0);
 
 	float z_vs = g_depth.Load(pix_coord, 0) * Z_FAR;
+
+	if(z_vs == Z_FAR) return float4(0, 0, 0, MAX_T);
+
 	float3 dir_vs = normalize(IN.viewspace_ray);
 	float3 pos_vs = IN.viewspace_ray * z_vs;
 	
@@ -130,7 +137,6 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	//return target_vp.x;
 	if(target_t != -1)
 	{
-		//return RED;
 		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
 	}
 	else return float4(0, 0, 0, MAX_T);
@@ -154,17 +160,16 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float2 pix_size_uv = vp_pix_uv(vp_size);
 	float4 sample0 = samples_tex.Sample(g_linear, uv);
 	float3 sample0_color = sample0.xyz;
+
 	float sample0_t = sample0.w;
 	float sample0_z = g_depth.Load(float3(pix_coord, 0)) * Z_FAR;
-	//return sample0;
+
 	float3 sample0_normal = g_normal.Load(float3(pix_coord, 0));
 	float total_weights = 0;
-	//HAS TO BE INT!
-	//otherwise we avg sample_t, which IS INCORRECT
-	//testing all 4 samples used for the bilinear avg is too expensive ;(
+
 	float blur_distance = g_debug_vars[2];
 	float3 filtered = 0;
-	float blur_scale = 1;//clamp(sample0_t, 0,28) / 28;
+	float blur_scale = blur_distance;
 
 	float rotation = (IN.position.y * vp_size.x + IN.position.x);
 	float rotation_s = sin(rotation);
@@ -180,11 +185,9 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 		float2 pix_offset = poisson_pt * blur_distance * (35 / sample0_z);
 		float2 uv_offset = pix_offset * pix_size_uv;
-		float4 sample = samples_tex.Sample(g_linear, uv + uv_offset);
-			
-		//we cannot use bilinear sampled t
-		float sample_t = samples_tex.Load(float3(pix_coord + pix_offset, 0)).w;
-		//float sample_t = sample.w;
+
+		float4 sample = samples_tex.Load(float3(pix_coord + pix_offset, 0));			
+		float sample_t = sample.w;
 
 		//to fix blur edges where t is tiny and MAX_T is 3000...
 		//also tried straight up decreasing MAX_T... 
@@ -194,7 +197,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 		float3 color = sample.xyz;
 
 		float sample_z = g_depth.Load(float3(pix_coord + pix_offset, 0)) * Z_FAR;
-		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0));
+		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0)).xyz;
 
 		//we want dot's range (-1, 1) to go to (0, 2)
 		float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
@@ -206,7 +209,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 		//ideally we want to separate the diff out
 		float range = exp(-diff*diff/9);
 			
-		float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 30, 0, 3));
+		float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 100, 0, 6));
 
 		if(g_vars[0] == 1) weight *= range;		
 
@@ -215,8 +218,7 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 		filtered += weight * saturate(sample);
 					
 	}
-	filtered /= total_weights;// == 0 ? 1 : total_weights;
-	float3 total = filtered;
-	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + total.xyzz * 0.05;
+	filtered /= total_weights;
+	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + filtered.xyzz * 0.05;
 
 }

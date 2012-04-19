@@ -255,7 +255,7 @@ void GfxDemo::init(HINSTANCE instance)
 	TwAddVarRW(bar, "GBuffer Debug", TW_TYPE_UINT32, &gbuffer_debug_mode, "min=0 max=3");
 	TwAddVarRW(bar, "Blur Sigma", TW_TYPE_FLOAT, &blur_sigma, "min=1 max=9 step=0.05");
 	TwAddVarRW(bar, "Noise Ratio", TW_TYPE_FLOAT, &noise_ratio, "min=0.001 max=0.2 step=0.001");
-	TwAddVarRW(bar, "SSR Blur Ratio", TW_TYPE_FLOAT, &ssr_blur_ratio, "min=0 max=35 step=0.05");
+	TwAddVarRW(bar, "SSR Blur Ratio", TW_TYPE_FLOAT, &ssr_blur_ratio, "min=0 max=65 step=0.05");
 	TwAddVarRW(bar, "Bilateral Z", TW_TYPE_BOOLCPP, &bilateral_z, "");
 
 	TwAddVarRW(bar, "DX", TW_TYPE_FLOAT, &dx, "step=0.0005");
@@ -574,7 +574,7 @@ void GfxDemo::frame()
 			12,// Font size
 			10,// X position
 			window.size().cy - 20,// Y position
-			0xff0000ff,// Text color, 0xAaBbGgRr
+			0xff00cc44,// Text color, 0xAaBbGgRr
 			FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
 			);
 	}
@@ -590,7 +590,7 @@ void GfxDemo::frame()
 				12,// Font size
 				10,// X position
 				window.size().cy - row * 20,// Y position
-				0xff009933,// Text color, 0xAaBbGgRr
+				0xff003311,// Text color, 0xAaBbGgRr
 				FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
 			);
 	}

@@ -220,18 +220,18 @@ namespace fx
 
 	void make_blur_ctx(Gfx* gfx, BlurContext* ctx)
 	{		
-		auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_5_0");	
+		auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_4_0");	
 		gfx->device->CreateVertexShader(
 			vs_blob->GetBufferPointer(), 
 			vs_blob->GetBufferSize(), 
 			nullptr, 
 			&ctx->vs);
 		vs_blob->Release();
-		auto ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_x", "ps_5_0");
+		auto ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_x", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
 			ps_blob->GetBufferSize(), nullptr, &ctx->ps_h);
 		ps_blob->Release();
-		ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_y", "ps_5_0");
+		ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_y", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
 			nullptr, &ctx->ps_v);
 		ps_blob->Release();	
@@ -431,7 +431,7 @@ namespace fx
 	void make_ssr_ctx( Gfx* gfx, SSRContext* ctx )
 	{
 
-		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_5_0");	
+		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_4_0");	
 		gfx->device->CreateVertexShader(
 			vs_blob->GetBufferPointer(), 
 			vs_blob->GetBufferSize(), 
@@ -439,22 +439,22 @@ namespace fx
 			&ctx->vs);
 		vs_blob->Release();
 
-		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_5_0");
+		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
 			ps_blob->GetBufferSize(), nullptr, &ctx->ps_gen_samples);
 		ps_blob->Release();
 		/*
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "combine_samples_ps", "ps_5_0");
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "combine_samples_ps", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
 			ps_blob->GetBufferSize(), nullptr, &ctx->ps_combine_samples);
 		ps_blob->Release();
 		*/
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_ps", "ps_5_0");
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_ps", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
 			nullptr, &ctx->ps_shade);
 		ps_blob->Release();	
 		/*
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "ps", "ps_5_0");
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "ps", "ps_4_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
 			nullptr, &ctx->ps_old);
 		ps_blob->Release();	
