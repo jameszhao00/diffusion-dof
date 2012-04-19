@@ -174,7 +174,8 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float rotation = (IN.position.y * vp_size.x + IN.position.x);
 	float rotation_s = sin(rotation);
 	float rotation_c = cos(rotation);
-
+	
+	float noise_intensity = g_debug_vars[3];
 	for(int i = 0; i < 12; i++)
 	{					
 		float2 poisson_pt = float2(poisson_12[2 * i], poisson_12[2 * i + 1]);	
@@ -208,8 +209,13 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 			
 		//ideally we want to separate the diff out
 		float range = exp(-diff*diff/9);
-			
-		float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 100, 0, 6));
+		
+
+		
+		//float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 100, 0, 6));
+		float st = blur_scale * sample_t;
+		//float weight = gauss2d(abs(poisson_pt), clamp(blur_scale * (sample_t)*(sample_t)/30000, 0.05, 100));
+		float weight = gauss2d(abs(poisson_pt), clamp(blur_scale * (sample_t)*(sample_t)*(sample_t)/800000, 0.05, 10));
 
 		if(g_vars[0] == 1) weight *= range;		
 
