@@ -222,7 +222,7 @@ void GfxDemo::init(HINSTANCE instance)
 	gbuffer_debug_mode = 0;
 	aa_visualize = false;
 	anim_frame = 0;
-	blur_sigma = 3;
+	blur_sigma = 17;
 
 	XMStoreFloat4((XMFLOAT4*)obj_ori, XMQuaternionIdentity());
 	window.init(instance);
@@ -255,8 +255,8 @@ void GfxDemo::init(HINSTANCE instance)
 	
 
 	camera_i = 0;
-	noise_ratio = 0.01;
-	ssr_blur_ratio = 2.8;
+	noise_ratio = 0.06;
+	ssr_blur_ratio = 20;
 	bilateral_z = true;
 	TwAddVarRW(bar, "Camera", TW_TYPE_INT32, &camera_i, "min=0");
 	TwAddVarRW(bar, "Orientation", TW_TYPE_QUAT4F, obj_ori, "opened=true axisy=y axisz=-z");
@@ -377,14 +377,6 @@ void GfxDemo::frame()
 	gbuffer_debug_cb_data.light_dir_ws[1] = 500 * light_dir_ws[1];
 	gbuffer_debug_cb_data.light_dir_ws[2] = 500 * light_dir_ws[2];
 	gbuffer_debug_cb_data.light_dir_ws[3] = 1;
-	/*
-	auto joint_n = package.skeletal_animations[0].joints_count;
-	auto frame_n = package.skeletal_animations[0].frames_count;
-	int frame = anim_frame % frame_n;
-	auto bone_data = &package.skeletal_animations[0].data[frame * joint_n];
-	
-	memcpy(&object_animation_cb_data, bone_data, sizeof(package::m44) * joint_n);
-	*/
 	
 	SIZE window_size = window.size();
 
@@ -486,27 +478,71 @@ void GfxDemo::frame()
 	};
 	d3d.immediate_ctx->OMSetRenderTargets(rtvs_count, rtvs, d3d.dsv);
 	gpu_env.gfx_profiler.begin_block(L"gen gbuffer");
-	for(auto i = 0; i < package.meshes[0].mesh_parts.size(); i++)
 	{
-		int count =  package.meshes[0].mesh_parts.size();
-		auto mesh_part = package.meshes[0].mesh_parts[i];
+		{
+			
+			for(auto i = 0; i < package.meshes[0].mesh_parts.size(); i++)
+			{
+				int count =  package.meshes[0].mesh_parts.size();
+				auto mesh_part = package.meshes[0].mesh_parts[i];
 		
-		//we need to sync base_primitive id for each mesh part
-		//object_cb_data.base_primitive_id[0] = mesh_part.indices_offset / 3;
-		object_cb_data.misc[0] = (i == 0) ? 1 : 0;
-		d3d.sync_to_cbuffer(object_cb, object_cb_data);
-		if(!package.materials[mesh_part.material].textures.empty())
-		{
-			auto texture = textures.at(package.materials[mesh_part.material].textures.front());
-			srvs[0] = texture.p;
+				//we need to sync base_primitive id for each mesh part
+				//object_cb_data.base_primitive_id[0] = mesh_part.indices_offset / 3;
+				object_cb_data.misc[0] = (i == 0) ? 1 : 0;
+				d3d.sync_to_cbuffer(object_cb, object_cb_data);
+				if(!package.materials[mesh_part.material].textures.empty())
+				{
+					auto texture = textures.at(package.materials[mesh_part.material].textures.front());
+					srvs[0] = texture.p;
+				}
+				else
+				{
+					srvs[0] = nullptr;
+				}
+				d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
+				d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
+				d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
+			}
 		}
-		else
-		{
-			srvs[0] = nullptr;
+		if(1)
+		{			
+			auto joint_n = dude_package.skeletal_animations[0].joints_count;
+			auto frame_n = dude_package.skeletal_animations[0].frames_count;
+			int frame = anim_frame % frame_n;
+			auto bone_data = &dude_package.skeletal_animations[0].data[frame * joint_n];	
+			memcpy(&object_animation_cb_data, bone_data, sizeof(package::m44) * joint_n);
+			
+			d3d.sync_to_cbuffer(object_animation_cb, object_animation_cb_data);
+			unsigned int offset = 0;
+			d3d.immediate_ctx->IASetInputLayout(drawop_dude.il);
+			d3d.immediate_ctx->IASetVertexBuffers(0, 1, &drawop_dude.vb.p, &drawop_dude.vb_stride, &offset);
+			d3d.immediate_ctx->IASetIndexBuffer(drawop_dude.ib, DXGI_FORMAT_R32_UINT, 0);
+			d3d.immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			for(auto i = 0; i < dude_package.meshes[0].mesh_parts.size(); i++)
+			{
+				
+				int count =  dude_package.meshes[0].mesh_parts.size();
+				auto mesh_part = dude_package.meshes[0].mesh_parts[i];
+
+		
+				//we need to sync base_primitive id for each mesh part
+				//object_cb_data.base_primitive_id[0] = mesh_part.indices_offset / 3;
+				object_cb_data.misc[0] = (i == 0) ? 1 : 0;
+				d3d.sync_to_cbuffer(object_cb, object_cb_data);
+				if(!dude_package.materials[mesh_part.material].textures.empty())
+				{
+					auto texture = dude_textures.at(dude_package.materials[mesh_part.material].textures.front());
+					srvs[0] = texture.p;
+				}
+				else
+				{
+					srvs[0] = nullptr;
+				}
+				d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
+				d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
+				d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
+			}
 		}
-		d3d.immediate_ctx->PSSetSamplers(0, 1, &gpu_env.linear_sampler.p);
-		d3d.immediate_ctx->PSSetShaderResources(0, srvs_count, srvs);
-		d3d.immediate_ctx->DrawIndexed(mesh_part.indices_count, mesh_part.indices_offset, 0);		
 	}
 
 	gpu_env.gfx_profiler.end_block();
@@ -557,7 +593,7 @@ void GfxDemo::frame()
 	//fx::additive_blend(&d3d, &gpu_env, &fx_env.additive_blend_ctx, 
 	//	debug_srv[2], debug_srv[1], d3d.back_buffer_rtv);
 	*/
-	if((debug_render_frame % 3 == 0) && do_anim) anim_frame++;
+	if((debug_render_frame % 1 == 0) && do_anim) anim_frame++;
 	
 	//for debugging purposes
 	if(debug_render_frame < 2)
@@ -596,7 +632,7 @@ void GfxDemo::frame()
 	for(auto it = gpu_env.gfx_profiler.blocks.begin(); it != gpu_env.gfx_profiler.blocks.end(); it++, row++ )
 	{
 		std::wstringstream ws;
-		ws << it->first << " = " << it->second->ms;
+		ws << it->first << " : " << it->second->ms << " ms";
 		drawtext->DrawString(
 			d3d.immediate_ctx,
 				ws.str().c_str(),// String
@@ -625,12 +661,15 @@ void GfxDemo::load_models()
 	if(1)
 	{		
 		model = asset::fbx::load_animated_fbx_model("assets/source/ssr/ref3.fbx", &cameras);
-		//model = asset::fbx::load_animated_fbx_model("assets/source/cb.fbx");
+		//auto dude_model = asset::fbx::load_animated_fbx_model("assets/source/dude.fbx", &cameras);
 	
 	
 		list<const Model*> models;
 		models.push_back(model.get());
 		package::bake_package(L"assets/ssr3.package", &models);
+		//models.clear();
+		//models.push_back(dude_model.get());
+		//package::bake_package(L"assets/dude.package", &models);
 	}
 	
 	cam_focus[0] = 0;//model->center[0];
@@ -639,6 +678,8 @@ void GfxDemo::load_models()
 	cam_focus[2] = 0;//model->center[2];
 
 	package::load_package(L"assets/ssr3.package", &package);
+	
+	package::load_package(L"assets/dude.package", &dude_package);
 
 	d3d.create_draw_op(
 		package.meshes[0].verticies, 
@@ -647,6 +688,13 @@ void GfxDemo::load_models()
 		(unsigned int*)package.meshes[0].indices, 
 		package.meshes[0].indices_count, 
 		il, &drawop);
+	d3d.create_draw_op(
+		dude_package.meshes[0].verticies, 
+		dude_package.meshes[0].vertex_count, 
+		dude_package.meshes[0].vertex_stride, 
+		(unsigned int*)dude_package.meshes[0].indices, 
+		dude_package.meshes[0].indices_count, 
+		il, &drawop_dude);
 
 	for(int i = 0; i < package.textures.size(); i++)
 	{
@@ -660,6 +708,19 @@ void GfxDemo::load_models()
 			&srv.p,
 			nullptr);
 		textures.push_back(srv);
+	}
+	for(int i = 0; i < dude_package.textures.size(); i++)
+	{
+		CComPtr<ID3D11ShaderResourceView> srv;
+		auto hr = D3DX11CreateShaderResourceViewFromMemory(
+			d3d.device, 
+			dude_package.textures.at(i).data, 
+			dude_package.textures.at(0).byte_size, 
+			nullptr,
+			nullptr, 
+			&srv.p,
+			nullptr);
+		dude_textures.push_back(srv);
 	}
 	D3DX11_IMAGE_LOAD_INFO load_info;
 	load_info.Format = DXGI_FORMAT_R32G32B32_FLOAT;

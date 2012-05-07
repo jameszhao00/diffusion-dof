@@ -195,9 +195,13 @@ namespace asset
 				auto r = mesh->GetControlPointAt(vert_i);
 				auto vert_pos = node_to_world.MultT(r);			
 				AssetVertex vert;	
+				vert.joint_weights[0] = 0;
+				vert.joint_weights[1] = 0;
+				vert.joint_weights[2] = 0;
+				vert.joint_weights[3] = 0;
 				//negate z b/c we converted to opengl coord sys
 				//the directx conversion doesn't work...	
-				vert.position = vec3(vert_pos.mData[0], vert_pos.mData[1], -vert_pos.mData[2]);
+				vert.position = vec3(vert_pos.mData[0], vert_pos.mData[1], vert_pos.mData[2]);
 
 				if(normals_element)
 				{
@@ -214,7 +218,7 @@ namespace asset
 					normal = node_to_world.MultR(normal);
 					//negate z b/c we converted to opengl coord sys
 					//the directx conversion doesn't work...	
-					vert.normal = vec3(normal.mData[0], normal.mData[1], -normal.mData[2]);
+					vert.normal = vec3(normal.mData[0], normal.mData[1], normal.mData[2]);
 				}
 				if(uvs_element)
 				{
@@ -250,9 +254,9 @@ namespace asset
 					tri.material_index = material_element->GetIndexArray().GetAt(poly_i); 
 				}
 				//change winding order b/c we're in OPENGL mode...
-				tri.vertex_indices[0] = mesh->GetPolygonVertex(poly_i, 2);
+				tri.vertex_indices[0] = mesh->GetPolygonVertex(poly_i, 0);
 				tri.vertex_indices[1] = mesh->GetPolygonVertex(poly_i, 1);
-				tri.vertex_indices[2] = mesh->GetPolygonVertex(poly_i, 0);
+				tri.vertex_indices[2] = mesh->GetPolygonVertex(poly_i, 2);
 				model->triangles.push_back(tri);
 			}
 			//skin
@@ -446,7 +450,7 @@ namespace asset
 
 			auto desired_unit(KFbxSystemUnit::cm);
 			KFbxAxisSystem desired_axis(KFbxAxisSystem::OpenGL);
-
+			/*
 			if (current_unit != desired_unit)
 			{
 				desired_unit.ConvertScene(scene);
@@ -455,7 +459,7 @@ namespace asset
 			{
 				desired_axis.ConvertScene(scene);
 			}			
-		
+		*/
 			FbxGeometryConverter geo_converter(sdk_manager);;	
 			
 

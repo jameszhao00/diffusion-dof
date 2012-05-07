@@ -42,6 +42,11 @@ VS2PS vs(App2VS IN)
 	VS2PS OUT;
 	float4 skinned_pos = 0;
 	float4 skinned_normal = 0;
+	if(IN.bone_weights[0] == 0)
+	{	
+		skinned_pos = float4(IN.position, 1);
+		skinned_normal = float4(IN.normal, 0);
+	}
 	for(int i = 0; i < 4; i++)
 	{
 		uint bone = IN.bones[i];
@@ -57,7 +62,7 @@ VS2PS vs(App2VS IN)
 		OUT.normal = mul(skinned_normal, g_wv).xyz;
 		OUT.vs_pos = mul(float4(skinned_pos.xyz, 1), g_wv).xyz;
 	}
-	if(1)
+	if(0)
 	{		
 		OUT.position = mul(float4(IN.position.xyz, 1), g_wvp);
 		OUT.normal = mul(float4(IN.normal, 0), g_wv).xyz;

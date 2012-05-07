@@ -16,6 +16,7 @@ Texture2D<float4> g_samples : register(t[4]);
 #define z_error_bounds 25
 #define base_increment 10
 
+static float3 f0 = 0.035;
 static float poisson_12[] = {
 	0.4364348f, -0.8602998f,
 	-0.04865971f, -0.9352954f,
@@ -64,9 +65,11 @@ float vpy_to_t(float vpy, float half_cot_fov, float2 vp_size, float3 pos_vs, flo
 			(2 * vpy * r_vs.z - r_vs.z * vp_size.y + r_vs.y * half_cot_fov * vp_size.y);	
 }
 #define MAX_T 3000
-float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, out float target_t)
+float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs, float half_cot_fov, 
+	out float target_t, out float normal_scale)
 {	
 	target_t = -1;
+	normal_scale = 0;
 	float2 r_ss = normalize(vs_to_vp(pos_vs + 50 * r_vs, vp_size, g_proj) - pix_coord);
 	
 	float2 p0_vp = pix_coord;
@@ -80,7 +83,7 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 	float z0_rcp = 1/z0;
 	float z1_rcp = 1/z1;
 
-	float increment = 0.08;
+	float increment = 0.03;
 	float base = 0.02;
 	float2 pos_vp_increment = (p1_vp - p0_vp) * increment;
 	float ray_z_rcp_increment = (z1_rcp - z0_rcp) * increment;
@@ -89,17 +92,33 @@ float2 raytrace_fb(float2 pix_coord, float2 vp_size, float3 pos_vs, float3 r_vs,
 	float2 ray_z_rcp = z0_rcp + ray_z_rcp_increment * (base / increment);
 	
 
-	for(int i = 0; i < 33; i += 1)
+	for(int i = 0; i < 50; i += 1)
 	{		
+		if((sample_pos_vp.x < 20) || (sample_pos_vp.y < 20) || 
+			(sample_pos_vp.x >= vp_size.x - 20) || (sample_pos_vp.y >= vp_size.y - 20))
+		{
+			break;
+		}
 		float actual_z = g_depth.Load(float3(sample_pos_vp, 0)).x * Z_FAR;
 		float ray_z = rcp(ray_z_rcp);
 		float z_error = actual_z - ray_z;
-		if(actual_z < ray_z && abs(actual_z - ray_z) < 5) 
-		{
+		if(actual_z < ray_z && abs(actual_z - ray_z) < 2) 
+		{			
 			
-			float3 final_pos = pos_vs + r_vs * vpy_to_t(sample_pos_vp.y, half_cot_fov, vp_size, pos_vs, r_vs);
-			target_t = length(final_pos.xyz - pos_vs);
-			return sample_pos_vp;
+			float3 s_n = normalize(g_normal.Load(float3(sample_pos_vp, 0)).xyz);
+			float ndotr = dot(s_n, r_vs);
+			if(ndotr < 0)
+			{			
+				float3 final_pos = pos_vs + r_vs * vpy_to_t(sample_pos_vp.y, half_cot_fov, vp_size, pos_vs, r_vs);
+
+				normal_scale = ndotr < -0.04;
+				//float ndotv = dot(-normalize(pos_vs), s_n);
+				//normal_scale *= 1-pow(abs(ndotv), 80);
+
+				target_t = length(final_pos.xyz - pos_vs);
+				return sample_pos_vp;
+			}
+
 		}
 		//don't need abs since actual_z will always be greater than ray_z to get this far
 		float z_scale = clamp(z_error / 5, 0.4, 1);
@@ -133,11 +152,19 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 	r_vs = normalize(r_vs + noise);
 
 	float target_t;
-	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t);	
-	//return target_vp.x;
+
+	float fresnel = f0 + (1 - f0) * pow(1 - dot(-dir_vs, n_vs), 5);
+	
+	float normal_scale;
+	float2 target_vp = raytrace_fb(pix_coord.xy, vp_size, pos_vs, r_vs, half_cot_fov, target_t, normal_scale);	
+
 	if(target_t != -1)
 	{
-		return float4(g_color.SampleGrad(g_linear, vp_to_uv(vp_size, target_vp), 0, 0).xyz, target_t);
+		float2 target_uv = vp_to_uv(vp_size, target_vp);
+		float3 target_normal = g_normal.Load(float3(target_vp, 0)).xyz;
+		float view_scale = dot(target_normal, dir_vs) < -0.05;
+		return float4(g_color.SampleGrad(g_linear, target_uv, 0, 0).xyz, target_t) 
+			* fresnel * normal_scale * view_scale;
 	}
 	else return float4(0, 0, 0, MAX_T);
 }
@@ -160,6 +187,8 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float2 pix_size_uv = vp_pix_uv(vp_size);
 	float4 sample0 = samples_tex.Sample(g_linear, uv);
 	float3 sample0_color = sample0.xyz;
+	//DEBUG
+	//return sample0_color.xyzz;
 
 	float sample0_t = sample0.w;
 	float sample0_z = g_depth.Load(float3(pix_coord, 0)) * Z_FAR;
@@ -172,8 +201,11 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 	float blur_scale = blur_distance;
 
 	float rotation = (IN.position.y * vp_size.x + IN.position.x);
-	float rotation_s = sin(rotation);
-	float rotation_c = cos(rotation);
+	
+	float3 noise = normalize(g_noise.Load(float3(IN.position.xy % float2(256, 256), 0)).xyz - 0.5);
+
+	float rotation_s = sin(noise.x);
+	float rotation_c = cos(noise.x);
 	
 	float noise_intensity = g_debug_vars[3];
 	for(int i = 0; i < 12; i++)
@@ -185,9 +217,18 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 
 		float2 pix_offset = poisson_pt * blur_distance * (35 / sample0_z);
+
 		float2 uv_offset = pix_offset * pix_size_uv;
 
-		float4 sample = samples_tex.Load(float3(pix_coord + pix_offset, 0));			
+		float2 sample_pix_coord = pix_coord + pix_offset;
+
+		if(sample_pix_coord.x < 0 || sample_pix_coord.y < 0 || 
+			sample_pix_coord.x >= vp_size.x || sample_pix_coord.y >= vp_size.y)
+		{
+			continue;
+		}
+
+		float4 sample = samples_tex.Load(float3(sample_pix_coord, 0));			
 		float sample_t = sample.w;
 
 		//to fix blur edges where t is tiny and MAX_T is 3000...
@@ -197,8 +238,8 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 
 		float3 color = sample.xyz;
 
-		float sample_z = g_depth.Load(float3(pix_coord + pix_offset, 0)) * Z_FAR;
-		float3 sample_normal = g_normal.Load(float3(pix_coord + pix_offset, 0)).xyz;
+		float sample_z = g_depth.Load(float3(sample_pix_coord, 0)) * Z_FAR;
+		float3 sample_normal = g_normal.Load(float3(sample_pix_coord, 0)).xyz;
 
 		//we want dot's range (-1, 1) to go to (0, 2)
 		float normal_diff = abs(1 - dot(sample_normal, sample0_normal));
@@ -212,10 +253,8 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 		
 
 		
-		//float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 100, 0, 6));
+		float weight = gauss2d(abs(poisson_pt), blur_scale * clamp(sample_t / 100, 0.01, 6));
 		float st = blur_scale * sample_t;
-		//float weight = gauss2d(abs(poisson_pt), clamp(blur_scale * (sample_t)*(sample_t)/30000, 0.05, 100));
-		float weight = gauss2d(abs(poisson_pt), clamp(blur_scale * (sample_t)*(sample_t)*(sample_t)/800000, 0.05, 10));
 
 		if(g_vars[0] == 1) weight *= range;		
 
@@ -225,6 +264,6 @@ float4 shade_ps(VS2PS IN) : SV_TARGET
 					
 	}
 	filtered /= total_weights;
-	return g_color.Load(float3(pix_coord, 0)).xyzz * .95 + filtered.xyzz * 0.05;
+	return g_color.Load(float3(pix_coord, 0)).xyzz * (1 - f0).xyzz + filtered.xyzz * f0.xyzz;
 
 }

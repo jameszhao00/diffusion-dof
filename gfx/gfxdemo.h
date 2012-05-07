@@ -56,10 +56,13 @@ struct GfxDemo
 
 	bool invert_depth;
 	d3d::DrawOp drawop;
+	d3d::DrawOp drawop_dude;
 	package::Package package;
+	package::Package dude_package;
 	shared_ptr<Model> model;
 
 	vector<CComPtr<ID3D11ShaderResourceView>> textures;
+	vector<CComPtr<ID3D11ShaderResourceView>> dude_textures;
 	float blur_sigma;
 
 	float light_dir_ws[3];
