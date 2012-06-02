@@ -1,5 +1,4 @@
 #pragma once
-//#include <DirectXMath.h>
 #include <xnamath.h>
 #include <memory>
 #include <hash_map>

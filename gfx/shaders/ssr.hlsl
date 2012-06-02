@@ -16,7 +16,7 @@ Texture2D<float4> g_samples : register(t[4]);
 #define z_error_bounds 25
 #define base_increment 10
 
-static float3 f0 = 0.035;
+static float3 f0 = 0.075;
 static float poisson_12[] = {
 	0.4364348f, -0.8602998f,
 	-0.04865971f, -0.9352954f,
@@ -163,7 +163,7 @@ float4 gen_samples_ps(VS2PS IN) : SV_TARGET
 		float2 target_uv = vp_to_uv(vp_size, target_vp);
 		float3 target_normal = g_normal.Load(float3(target_vp, 0)).xyz;
 		float view_scale = dot(target_normal, dir_vs) < -0.05;
-		return float4(g_color.SampleGrad(g_linear, target_uv, 0, 0).xyz, target_t) 
+		return float4(g_color.SampleGrad(g_linear, target_uv, 1, 1).xyz, target_t) 
 			* fresnel * normal_scale * view_scale;
 	}
 	else return float4(0, 0, 0, MAX_T);

@@ -78,4 +78,7 @@
       <Filter>fx</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders\geometry.fx" />
+  </ItemGroup>
 </Project>

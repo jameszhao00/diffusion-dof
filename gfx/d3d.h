@@ -2,6 +2,7 @@
 #include <string>
 #include <locale>
 #include "gfx.h"
+#include <d3dx11effect.h>
 
 struct Window;
 #define MAX_BONES 64
@@ -122,7 +123,8 @@ struct D3D
 		ID3D11GeometryShader ** gs = nullptr,
 		ID3D11InputLayout** il = nullptr,
 		gfx::VertexTypes type = gfx::eUnknown);
-
+	
+	CComPtr<ID3DX11Effect> loadEffect(const wstring& path);
 	CComPtr<IDXGISwapChain> swap_chain;
 	CComPtr<ID3D11Device> device;
 	CComPtr<ID3D11DeviceContext> immediate_ctx;

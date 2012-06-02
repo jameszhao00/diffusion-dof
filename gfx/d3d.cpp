@@ -1,9 +1,12 @@
 #include "stdafx.h"
 
 #include <D3DCompiler.h>
+#include <iostream>
+#include <fstream>
 
 #include "d3d.h"
 #include "window.h"
+using namespace std;
 int getref(IUnknown* ptr)
 {
 	ptr->AddRef();
@@ -109,10 +112,8 @@ void D3D::init(Window & window)
 {
 	swap_chain_desc = make_swap_chain_desc(window);
 
-	D3D_FEATURE_LEVEL features[] = {D3D_FEATURE_LEVEL_10_0};
-
 	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_RLDO_DETAIL, 
-									features, 1, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
+									nullptr, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
 									&device.p, NULL, &immediate_ctx.p);
 		
 	window.resize_callback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
@@ -233,6 +234,22 @@ void D3D::draw(const d3d::DrawOp & draw_op)
 	immediate_ctx->DrawIndexed(draw_op.ib_count, 0, 0);
 }
 
+CComPtr<ID3DX11Effect> D3D::loadEffect(const wstring& path)
+{
+	ifstream ifs(path.c_str(), ios::binary);
+	ifs.seekg(0, ios::end);
+	int byteSize = ifs.tellg();
+	ifs.seekg(0, ios::beg);
+	char* buffer = new char[byteSize];
+	ifs.read(buffer, byteSize);
+	
+	CComPtr<ID3DX11Effect> effect;	
+	auto hr = D3DX11CreateEffectFromMemory(buffer, byteSize, 0, device, &effect.p);
+	assert(SUCCEEDED(hr));
+	ifs.close();
+	delete [] buffer;
+	return effect;
+}
 void D3D::create_shaders_and_il(const wchar_t * file, 
 	ID3D11VertexShader** vs, 
 	ID3D11PixelShader** ps,
@@ -310,8 +327,8 @@ namespace d3d
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
 		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
-			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
-			| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
+			//D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
+			//| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
 			, 0, 0, &shader_bin, &error_bin, nullptr);
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
 		{

@@ -9,6 +9,7 @@ void zero(T* ptr)
 }
 namespace fx
 {
+
 	struct FXContext
 	{		
 		CComPtr<VertexShader> vs;

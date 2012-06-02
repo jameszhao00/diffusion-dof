@@ -729,7 +729,7 @@ void GfxDemo::load_models()
 }
 void GfxDemo::load_shaders()
 {
-	//assert(0);// output linear Z so we don't have to convert from ndcz to linear z every pixel in ssr
+	auto geometryFx = d3d.loadEffect(L"shaders/geometry.cso");
 	d3d.create_shaders_and_il(L"shaders/standard_animated.hlsl", &vs.p, &ps.p, nullptr, &il.p, 
 		gfx::VertexTypes::eAnimatedStandard);
 	object_cb = d3d.create_cbuffer<d3d::cbuffers::ObjectCB>();
