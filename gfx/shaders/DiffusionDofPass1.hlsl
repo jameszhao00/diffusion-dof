@@ -7,7 +7,7 @@ RWTexture2D<float3> g_d;
 
 cbuffer DDofCB
 {
-	float4 g_coc;
+	float4 g_ddofVals;
 };
 cbuffer FSQuadCB : register(b1)
 {	
@@ -16,17 +16,17 @@ cbuffer FSQuadCB : register(b1)
 	float4 g_debug_vars;
 	float4x4 g_proj;
 };
-
+#define ITERATIONS 2
 float beta(float coc)
 {
-	return clamp(coc * coc * .5, 0, 1800);
+	return coc * coc * (1.f/ITERATIONS);
 }
 float z2coc(float sampleZ)
 {
 	//from http://http.developer.nvidia.com/GPUGems/gpugems_ch23.html
 	float aperture = 100;
 	float focallength = .5;
-	float planeinfocus = g_coc.x;
+	float planeinfocus = g_ddofVals.x;
 
 
 	return abs(aperture * (focallength * (sampleZ - planeinfocus)) /
@@ -44,7 +44,6 @@ void csPass1H( uint3 DTid : SV_DispatchThreadID )
 	float primarySize = size.y;
 	float secondarySize = size.x;
 	if(DTid.x > (primarySize - 1)) return; //we're out of bounds
-	float focalDistance = g_coc.x;
 	int2 coord0 = int2(0, DTid.x);
 	
 	float betaPrevious = 0;
@@ -101,7 +100,6 @@ void csPass1V( uint3 DTid : SV_DispatchThreadID )
 	float primarySize = size.x;
 	float secondarySize = size.y;
 	if(DTid.x > (primarySize - 1)) return; //we're out of bounds
-	float focalDistance = g_coc.x;
 	int2 coord0 = int2(DTid.x, 0);
 	
 	float betaPrevious = 1;

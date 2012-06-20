@@ -11,20 +11,7 @@
 using namespace std;
 void Core::initialize(HINSTANCE instance)
 {
-	double a[1024];
-	double b[1024];
-	double c[1024];
-	double v[1024];
-	double x[1024];
-	for(int i = 0; i < 1024; i++)
-	{
-		a[i] = c[i] = -1;
-		b[i] = 3;
-		v[i] = .5;
-	}
-	solveMatrix(1024, a, b, c, v, x);
-
-	window.init(instance);
+	window.initialize(instance);
 	d3d.init(window);	
 	renderer.initialize(d3d);
 
@@ -42,6 +29,7 @@ float dt = 0;
 
 void Core::frame()
 {		
+	window.handleEvents();
 	if(d3d.device == nullptr) return;
 	
 	renderer.beginFrame(int2(window.size().cx, window.size().cy));

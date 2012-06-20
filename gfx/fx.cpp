@@ -104,8 +104,8 @@ namespace fx
 
 		
 		CD3D11_SAMPLER_DESC  linear_sampler_desc(D3D11_DEFAULT);
-		linear_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-		linear_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		linear_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		linear_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 		gfx->device->CreateSamplerState(&linear_sampler_desc, &env->linear_sampler);
 		linear_sampler_desc.MaxAnisotropy = 16;
 		linear_sampler_desc.Filter = D3D11_FILTER_ANISOTROPIC;

@@ -1,4 +1,4 @@
-
+#pragma once
 struct Effect
 {
 	void initialize(D3D& d3d, const wchar_t* path, gfx::VertexTypes vertexType)

@@ -127,7 +127,7 @@ namespace fx
 			TwBar *bar = TwNewBar("Diffusion Dof");
 			dofCB.data.coc.x = 30.f;
 			TwAddVarRW(bar, "COC", TW_TYPE_FLOAT, 
-				&dofCB.data.coc.x, "min=0.01 max=100 step=0.1");
+				&dofCB.data.coc.x, "min=0.01 max=100 step=0.01");
 			TwAddVarRW(bar, "Use Gaussian Blur", TW_TYPE_BOOLCPP, 
 				&gaussianBlur, "");
 		}

@@ -86,6 +86,7 @@
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include=".\Renderer.h" />
+    <ClInclude Include="Effect.h" />
     <ClInclude Include="fbx.h" />
     <ClInclude Include="fx.h" />
     <ClInclude Include=".\animation.h" />

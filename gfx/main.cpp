@@ -1,25 +1,15 @@
 #include "stdafx.h"
 #include "gfxdemo.h"
 int main()
-{
-	
+{	
 	Core demo;	
 	demo.initialize(GetModuleHandle(nullptr));
-	MSG msg = {0};
-	while (WM_QUIT != msg.message)
+	while (!demo.window.quitFlag)
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else
-		{
-			demo.frame();
-		}
+		demo.frame();
 	}
 	demo.d3d.immediate_ctx->ClearState();
 	demo.d3d.immediate_ctx->Flush();
+	//HACK: move this elsewhere
 	TwTerminate();
-	
 }

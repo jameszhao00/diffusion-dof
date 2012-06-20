@@ -114,7 +114,7 @@ void D3D::init(Window & window)
 									nullptr, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
 									&device.p, NULL, &immediate_ctx.p);
 		
-	window.resize_callback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
+	window.resizeCallback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
 
 	ID3D11Texture2D * back_buffer;
 	swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
@@ -144,8 +144,7 @@ void D3D::init(Window & window)
 
 	set_viewport(window.size());
 
-	TwInit(TW_DIRECT3D11, device);
-	
+	TwInit(TW_DIRECT3D11, device);	
 }
 
 void D3D::set_viewport(SIZE size)
@@ -219,7 +218,7 @@ void D3D::window_resized(const Window * window)
             depth_buffer->Release();
 
 			set_viewport(window->size());
-			TwWindowSize(window->size().cx, window->size().cy);
+
         }
 
 	}
