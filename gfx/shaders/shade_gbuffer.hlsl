@@ -9,6 +9,7 @@ Texture2DMS<float, MSAA_COUNT> g_depth : register(t2);
 Texture2D<float4> g_normal : register(t0);
 Texture2D<float3> g_albedo : register(t1);
 Texture2D<float> g_depth : register(t2);
+Texture2D<float4> g_debugRef : register(t3);
 #endif
 
 
@@ -36,7 +37,6 @@ struct VS2PS
 struct PS2GPU
 {
 	float4 color : SV_TARGET0;
-	//float4 debug : SV_TARGET1;
 };
 VS2PS vs(float3 position : POSITION)
 {	
@@ -47,31 +47,24 @@ VS2PS vs(float3 position : POSITION)
 	return OUT;
 }
 
-PS2GPU ps( VS2PS IN )
+float4 ps( VS2PS IN ) : SV_TARGET
 {	
-	PS2GPU OUT;
 	int3 coord = int3(IN.position.xy, 0);
-	//int2 coord = int2(IN.position.xy);
-	float3 color = 0;
-	float4 vs_light_pos = mul(g_view, float4(g_light_dir_ws.xyz, 1));
-	//int3 pix_coord = int3(IN.position.xy, 0);
-	float vs_z = g_depth.Load(coord, 0).x * Z_FAR;
+	float4 vs_light_pos = mul(float4(g_light_dir_ws.xyz, 1), g_view);
+	float zNdc = g_depth.Load(coord, 0).x;
+	float vs_z = unproject_z(zNdc, g_proj_constants);
+	if(zNdc == 0) return float4(.2, .3, .5, 1);
 	float3 vs_pos = IN.viewspace_ray * vs_z;
+	
 	float3 vs_light_dir = normalize(vs_light_pos.xyz - vs_pos);
 	float3 vs_dir = normalize(vs_pos);
-	//negate vs_dir so all dirs are coming out of the surface
-	//half vector
 	float3 vs_h = normalize(vs_light_dir + (-vs_dir));
-	float3 c_light = float3(6, 6, 6);
-	//g_proj_constants.y
-	//OUT.color = OUT.debug = g_light_dir_ws.y; return OUT;
-	//for(int sample_i = 0; sample_i < MSAA_COUNT; sample_i++)
+	float3 c_light = 4;
+	float3 color = 0;
 	int sample_i = 0;
 	{		
 		float3 normal = normalize(g_normal.Load(coord, sample_i).xyz);
-		
 		float3 albedo = g_albedo.Load(coord, sample_i);
-		
 		if(vs_z != Z_FAR)
 		{	
 			if(1)
@@ -95,11 +88,11 @@ PS2GPU ps( VS2PS IN )
 		}
 		else
 		{
-			color = 0;//RED.xyz;
+			color = float4(.2, .3, .5, 1);//RED.xyz;
 		}
 		
 	}
 	color /= MSAA_COUNT;
-	OUT.color = color.xyzz;
-	return OUT;
+
+	return color.xyzz;
 }

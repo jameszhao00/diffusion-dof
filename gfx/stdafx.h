@@ -14,7 +14,6 @@
 #include <D3D11.h>
 #include <D3DX11.h>
 #include <D3DCompiler.h>
-#include <xnamath.h>
 
 #include <stdio.h>
 #include <tchar.h>
@@ -26,3 +25,7 @@
 
 #include <AntTweakBar.h>
 #include <IL/il.h>
+
+
+#include <glm/glm.hpp>
+#include <glm/ext.hpp>

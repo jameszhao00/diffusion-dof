@@ -146,6 +146,23 @@ namespace fx
 				d3d::name(env->fsquad_vb.p, "fsquad");
 			}
 		}
+		{
+			//reversed dss
+			D3D11_DEPTH_STENCIL_DESC ds_desc;
+			ZeroMemory(&ds_desc, sizeof(ds_desc));
+			ds_desc.DepthFunc = D3D11_COMPARISON_GREATER;
+			ds_desc.DepthEnable = true;
+			ds_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			gfx->device->CreateDepthStencilState(&ds_desc, &env->invertedDSS);	
+		}
+		{
+			//no test dss
+			D3D11_DEPTH_STENCIL_DESC ds_desc;
+			ZeroMemory(&ds_desc, sizeof(ds_desc));
+			ds_desc.DepthEnable = false;
+			ds_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+			gfx->device->CreateDepthStencilState(&ds_desc, &env->notestDSS);	
+		}
 	}
 
 	void make_gen_gbuffer_ctx(Gfx* gfx, GenGBufferContext* ctx)
@@ -179,7 +196,7 @@ namespace fx
 			nullptr,
 			gfx::VertexTypes::eFSQuad);	
 		
-		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::ShadeGBufferDebugCB>();
+		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::ShadeGBufferCB>();
 	}
 	void shade_gbuffer(Gfx* gfx, 
 		const GpuEnvironment* gpu_env,
@@ -187,13 +204,14 @@ namespace fx
 		Resource* albedo, 
 		Resource* normal,
 		Resource* depth,
-		d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
+		Resource* debugRef,
+		d3d::cbuffers::ShadeGBufferCB* gbuffer_debug_cb,
 		Target* target)
 	{
 		gfx->sync_to_cbuffer(fx_ctx->uniforms, *gbuffer_debug_cb);
 
 		Target* targets[TARGETS_COUNT] = {target};
-		Resource* resources[RESOURCES_COUNT] = {normal, albedo, depth};
+		Resource* resources[RESOURCES_COUNT] = {normal, albedo, depth, debugRef};
 		Uniforms* uniforms[UNIFORMS_COUNT] = {fx_ctx->uniforms, gpu_env->fsquad_uniforms};
 
 		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
@@ -210,6 +228,10 @@ namespace fx
 		gfx->immediate_ctx->PSSetShader(fx_ctx->ps, nullptr, 0);
 	
 		gfx->immediate_ctx->Draw(6, 0);
+
+		//cleanup
+		targets[0] = nullptr;
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
 
 	}
 
@@ -538,5 +560,216 @@ namespace fx
 		
 	}
 
+
+
+	void Bokeh::execute( Gfx* gfx, Resource* color, Resource* inputDepth, Target* outputDof )
+	{
+		Target* targets[TARGETS_COUNT] = {outputDof};
+		Resource* resources[RESOURCES_COUNT] = {color, inputDepth};
+		//set dss
+		gfx->immediate_ctx->OMSetDepthStencilState(gpuEnvironment->notestDSS, 0);
+		float blendFactor[] = {1, 1, 1, 1};
+		//set blend
+		gfx->immediate_ctx->OMSetBlendState(gpuEnvironment->additive_blend, blendFactor, 1);
+		gfx->immediate_ctx->OMSetRenderTargets(TARGETS_COUNT, targets, nullptr);
+		gfx->immediate_ctx->VSSetShaderResources(0, RESOURCES_COUNT, resources);
+		gfx->immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+		gfx->immediate_ctx->IASetInputLayout(nullptr);
+		bokehCB.sync();
+		gfx->immediate_ctx->VSSetConstantBuffers(0, 1, &bokehCB.cbuffer.p);
+		//gfx->immediate_ctx->IASetVertexBuffers(0, 1, nullptr, 0, 0);
+
+		gfx->immediate_ctx->VSSetShader(vs, nullptr, 0);
+		gfx->immediate_ctx->GSSetShader(gs, nullptr, 0);
+		gfx->immediate_ctx->PSSetShader(ps, nullptr, 0);
+		
+		gfx->immediate_ctx->Draw(gpuEnvironment->vp_w * gpuEnvironment->vp_h, 0);
+
+		gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
+		targets[0] = nullptr;
+		resources[0] = nullptr;
+		resources[1] = nullptr;
+		//restore dss
+		gfx->immediate_ctx->OMSetDepthStencilState(gpuEnvironment->invertedDSS, 0);
+		//restore blend
+		gfx->immediate_ctx->OMSetBlendState(gpuEnvironment->standard_blend, blendFactor, 1);
+		gfx->immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		gfx->immediate_ctx->VSSetShaderResources(0, RESOURCES_COUNT, resources);
+	}
+
+
+	void DiffusionDof::execute( Gfx* gfx, 
+		Resource* inputColor, 
+		Resource* inputDepth, 
+		Texture2D* scratchABC,
+		Texture2D* scratchD,
+		Texture2D* outputDof1,
+		Texture2D* outputDof2)
+	{
+		if(gaussianBlur)
+		{
+			fx::blur(gfx, gpuEnvironment, &fxEnvironment->blur_ctx, eHorizontal, 8, inputColor, outputDof1->rtv);
+			fx::blur(gfx, gpuEnvironment, &fxEnvironment->blur_ctx, eVertical, 8, outputDof1->srv, outputDof2->rtv);
+		}
+		else
+		{
+			gfx->immediate_ctx->VSSetShader(nullptr, nullptr, 0);
+			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
+			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
+			dofCB.sync();
+			{
+				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
+				gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
+				//horizontal
+				int numThreadGroups = (int)ceil(gpuEnvironment->vp_h / 32.f);
+				//call pass 1
+				{
+					gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
+					Resource* resources[] = {inputDepth, inputColor};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+				//call pass 2
+				{
+					gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
+					Resource* resources[] = {scratchABC->srv, scratchD->srv, inputColor};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {outputDof1->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+			}
+			if(1)
+			{
+				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
+				//vertical
+				int numThreadGroups = (int)ceil(gpuEnvironment->vp_w / 32.f);
+				//call pass 1
+				{
+					gfx->immediate_ctx->CSSetShader(pass1V, nullptr, 0);
+					Resource* resources[] = {inputDepth, outputDof1->srv};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+				//call pass 2
+				{
+					gfx->immediate_ctx->CSSetShader(pass2V, nullptr, 0);
+					Resource* resources[] = {scratchABC->srv, scratchD->srv};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {outputDof2->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+			}
+			{
+				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
+				gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
+				//horizontal
+				int numThreadGroups = (int)ceil(gpuEnvironment->vp_h / 32.f);
+				//call pass 1
+				{
+					gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
+					Resource* resources[] = {inputDepth, outputDof2->srv};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+				//call pass 2
+				{
+					gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
+					Resource* resources[] = {scratchABC->srv, scratchD->srv, inputColor};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {outputDof1->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+			}
+			if(1)
+			{
+				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
+				//vertical
+				int numThreadGroups = (int)ceil(gpuEnvironment->vp_w / 32.f);
+				//call pass 1
+				{
+					gfx->immediate_ctx->CSSetShader(pass1V, nullptr, 0);
+					Resource* resources[] = {inputDepth, outputDof1->srv};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+				//call pass 2
+				{
+					gfx->immediate_ctx->CSSetShader(pass2V, nullptr, 0);
+					Resource* resources[] = {scratchABC->srv, scratchD->srv};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					UAVResource* uavs[] = {outputDof2->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
+				}
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}
+			}
+		}
+	}
 
 };

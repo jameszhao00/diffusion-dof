@@ -3,6 +3,8 @@
 #include <locale>
 #include "gfx.h"
 #include <d3dx11effect.h>
+#include <FW1FontWrapper.h>
+#include <sstream>
 
 struct Window;
 #define MAX_BONES 64
@@ -18,40 +20,46 @@ namespace d3d
 	{
 		CComPtr<ID3D11Buffer> vb;
 		CComPtr<ID3D11Buffer> ib;
-		CComPtr<ID3D11InputLayout> il;
 		unsigned int vb_stride;
 		unsigned int ib_count;
 	};
 	namespace cbuffers
 	{
-		struct ShadeGBufferDebugCB
+		struct DDofCB
+		{
+			float4 coc;
+		};
+		struct BokehCB
+		{
+			float4 cocPower;
+		};
+		struct ShadeGBufferCB
 		{
 			int render_mode;
 			int use_fresnel;
 			int padding[2];
-			float view[4][4];
+			float4x4 view;
 			float light_dir_ws[4];
 		};
 		struct FSQuadCb
 		{
-			float inv_p[4][4];
+			float4x4 inv_p;
 			//0 = f / (f - n)
 			//1 = (-f * n) / (f - n)
 			float proj_constants[4]; 
 			float debug_vars[4];
 			float vars[4];
-			float proj[4][4];
+			float4x4 proj;
 
 		};
 		struct ObjectCB
 		{
-			float wvp[4][4];
-			float wv[4][4];
-			unsigned int misc[4];
+			float4x4 wvp;
+			float4x4 wv;
 		};
 		struct ObjectAnimationCB
 		{
-			float bone_transforms[MAX_BONES][4][4];
+			float4x4 bone_transforms[MAX_BONES];
 		};
 		struct BlurCB
 		{
@@ -91,6 +99,7 @@ namespace d3d
 			(void*)data);
 		return string(data, data_size);
 	}
+	
 };
 struct D3D
 {
@@ -105,15 +114,12 @@ struct D3D
 	template<typename T>
 	void sync_to_cbuffer(ID3D11Buffer * buffer, const T & data);
 
-	void draw(const d3d::DrawOp & draw_op);
-
 	void create_draw_op(
 		const char* vb, 
 		int vertex_count,
 		int vb_stride,
 		unsigned int* ib, 
 		int indices_count,
-		ID3D11InputLayout* il,
 		d3d::DrawOp* drawop);
 
 	//duplicate of the above... not using ccomptr
@@ -124,7 +130,6 @@ struct D3D
 		ID3D11InputLayout** il = nullptr,
 		gfx::VertexTypes type = gfx::eUnknown);
 	
-	CComPtr<ID3DX11Effect> loadEffect(const wstring& path);
 	CComPtr<IDXGISwapChain> swap_chain;
 	CComPtr<ID3D11Device> device;
 	CComPtr<ID3D11DeviceContext> immediate_ctx;
@@ -138,6 +143,86 @@ private:
 	void window_resized(const Window * window);
 };
 
+template<typename TBacking>
+struct CBuffer
+{
+	void initialize(D3D& pd3d)
+	{
+		d3d = &pd3d;
+		cbuffer.Attach(d3d->create_cbuffer<TBacking>());
+	}
+	void sync()
+	{
+		d3d->sync_to_cbuffer(cbuffer, data);
+	}
+	CComPtr<ID3D11Buffer> cbuffer;
+	TBacking data;
+private:
+	D3D* d3d;
+};
+struct Texture2D
+{
+	Texture2D() : isConfigured(false) { }
+	void configure(string name, DXGI_FORMAT format, int msaaCount = 1, int mips = 1) 
+	{
+		this->name = name;
+		this->format = format;
+		this->msaaCount = msaaCount;
+		this->mips = mips;
+		isConfigured = true;
+	}
+	void clear(ID3D11DeviceContext* context, float r, float g, float b, float a)
+	{
+		float color[4] = {r, g, b, a};
+		context->ClearRenderTargetView(rtv, color);
+	}
+	void initialize(D3D& d3d, int w, int h, bool createUav = false)
+	{
+		assert(isConfigured);
+
+		if(srv.p) { srv.Release(); srv = nullptr; }
+		if(rtv) { rtv.Release(); rtv = nullptr; }
+		if(texture) { texture.Release(); texture = nullptr; }
+		if(uav) { uav.Release(); uav = nullptr; }
+		
+		D3D11_TEXTURE2D_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Width = w;
+		desc.Height = h;
+		desc.ArraySize = 1;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;	
+		if(createUav)
+		{
+			desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+		}
+		desc.SampleDesc.Count = msaaCount;
+		desc.SampleDesc.Quality = 0;
+		desc.MipLevels = mips;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.Format = format;
+
+		
+		d3d.device->CreateTexture2D(&desc, nullptr, &texture.p);
+		d3d.device->CreateRenderTargetView(texture, nullptr, &rtv.p);
+		d3d.device->CreateShaderResourceView(texture, nullptr, &srv.p);
+		if(createUav)
+		{
+			d3d.device->CreateUnorderedAccessView(texture, nullptr, &uav.p);
+		}
+		d3d::name(texture.p, name);
+		d3d::name(rtv.p, name);
+		d3d::name(srv.p, name);
+	}
+	bool isConfigured;
+	int msaaCount; 
+	int mips;
+	DXGI_FORMAT format;
+	string name;
+	CComPtr<ID3D11UnorderedAccessView> uav;
+	CComPtr<ID3D11ShaderResourceView> srv;
+	CComPtr<ID3D11RenderTargetView> rtv;
+	CComPtr<ID3D11Texture2D> texture;
+};
 template<typename T>
 void D3D::create_buffer(const gfx::Data<T> * data, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf)
 {		
@@ -245,6 +330,24 @@ public:
 		}
 
 		frame_i++;
+	}
+	void drawStats(D3D& d3d, IFW1FontWrapper* textRenderer)
+	{
+		int row = 0;
+		for(auto it = blocks.begin(); it != blocks.end(); it++, row++ )
+		{
+			std::wstringstream ws;
+			ws << it->first << " : " << it->second->ms << " ms";
+			textRenderer->DrawString(
+				d3d.immediate_ctx,
+					ws.str().c_str(),// String
+					25,// Font size
+					10,// X position
+					row * 40,// Y position
+					0xffffffff,// Text color, 0xAaBbGgRr
+					FW1_NOGEOMETRYSHADER | FW1_RESTORESTATE// Flags (for example FW1_RESTORESTATE to keep context states unchanged)
+				);
+		}
 	}
 	struct ExecutionBlock
 	{

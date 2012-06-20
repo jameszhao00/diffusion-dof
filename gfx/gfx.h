@@ -1,8 +1,7 @@
 #pragma once
-#include <xnamath.h>
 #include <memory>
 #include <hash_map>
-
+#include "lwmath.h"
 
 using namespace std;
 struct Ray
@@ -12,6 +11,8 @@ struct Ray
 };
 typedef ID3D11VertexShader VertexShader;
 typedef ID3D11PixelShader PixelShader;
+typedef ID3D11GeometryShader GeometryShader;
+typedef ID3D11ComputeShader ComputeShader;
 typedef ID3D11Buffer Uniforms;
 namespace gfx
 {
@@ -25,8 +26,6 @@ namespace gfx
 		eFSQuad
 	};
 	
-	struct float4x4 { float data[4][4]; };
-
 	struct StandardVertex
 	{
 		StandardVertex()
@@ -75,7 +74,8 @@ namespace gfx
 	
 	struct AnimationFrame
 	{
-		shared_ptr<Data<float4x4>> bone_transforms;
+		vector<float4x4> bone_transforms;
+		int byteSize() const { return sizeof(float4x4) * bone_transforms.size(); }
 	};
 	struct Animation
 	{
@@ -98,10 +98,47 @@ namespace gfx
 		int vertices_stride;
 		shared_ptr<Data<unsigned int>> indexes;
 		list<shared_ptr<Animation>> animations;
+		
 
 		float center[3];
 		
 		vector<MeshPart> parts;
 
 	};
+};
+
+typedef vector<gfx::StandardAnimatedVertex> VertexCollection;
+typedef vector<unsigned int> IndexCollection;
+typedef vector<char> Texture;
+typedef vector<unique_ptr<Texture>> TextureCollection;
+struct RuntimeMeshPart
+{
+	int indexOffset;
+	int indexCount;
+	vector<int> textures;
+};
+struct RuntimeMesh
+{
+	enum Type
+	{
+		eStatic,
+		eAnimated
+	};
+	Type type;
+	/*
+	struct
+	{
+		VertexCollection vertices;
+		IndexCollection indices;
+		TextureCollection textures;
+	} build;
+	*/
+	vector<RuntimeMeshPart> parts;
+	struct
+	{
+		CComPtr<ID3D11Buffer> vb;
+		CComPtr<ID3D11Buffer> ib;
+		vector<CComPtr<ID3D11ShaderResourceView>> textures;
+		unsigned int vertexStride;
+	} live;
 };

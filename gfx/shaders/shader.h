@@ -18,12 +18,12 @@ float unproject_z(float z, float2 proj_constants)
 {
 	return proj_constants[1] / (z - proj_constants[0]);
 }
-/*
+
 float3 get_vs_pos(float3 vs_ray, float ndc_z, float2 proj_constants)
 {
 	return vs_ray * unproject_z(ndc_z, proj_constants);
 }
-*/
+
 /*
 //n1/n2 = ndc bounds...
 float2 ndc_to_vp(float2 n1, float2 n2, float2 vp, float2 n)

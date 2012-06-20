@@ -2,28 +2,24 @@
 #include "gfxdemo.h"
 int main()
 {
-	ID3D11Debug* debug;
+	
+	Core demo;	
+	demo.initialize(GetModuleHandle(nullptr));
+	MSG msg = {0};
+	while (WM_QUIT != msg.message)
 	{
-		GfxDemo demo;	
-		demo.init(GetModuleHandle(nullptr));
-		demo.d3d.device->QueryInterface(IID_ID3D11Debug, (void**)&debug);
-		MSG msg = {0};
-		while (WM_QUIT != msg.message)
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-			{
-				TranslateMessage(&msg);
-				DispatchMessage(&msg);
-			}
-			else
-			{
-				demo.frame();
-			}
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
 		}
-		demo.d3d.immediate_ctx->ClearState();
-		demo.d3d.immediate_ctx->Flush();
-		TwTerminate();
+		else
+		{
+			demo.frame();
+		}
 	}
-	debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
-	debug->Release();
+	demo.d3d.immediate_ctx->ClearState();
+	demo.d3d.immediate_ctx->Flush();
+	TwTerminate();
+	
 }

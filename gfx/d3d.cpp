@@ -27,7 +27,7 @@ DXGI_SWAP_CHAIN_DESC make_swap_chain_desc(const Window & window)
 	swap_chain_desc.SampleDesc.Count = 1;
 	swap_chain_desc.SampleDesc.Quality = 0;
 	swap_chain_desc.Windowed = TRUE;
-	swap_chain_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	swap_chain_desc.Flags = 0;
 	return swap_chain_desc;
 }
 D3D11_TEXTURE2D_DESC make_depth_stencil_desc(SIZE size)
@@ -72,7 +72,6 @@ void D3D::create_draw_op(
 		int vb_stride,
 		unsigned int* ib, 
 		int indices_count,
-		ID3D11InputLayout* il,
 		d3d::DrawOp* draw_op)
 {
 	//WARNING: D3D11_BIND_SHADER_RESOURCE not usually necessary...
@@ -86,7 +85,6 @@ void D3D::create_draw_op(
 	d3d::name(draw_op->ib.p, "drawop ib");
 	draw_op->ib_count = indices_count;
 	draw_op->vb_stride = vb_stride;
-	draw_op->il.Attach(il);
 }
 
 void D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf)
@@ -172,6 +170,7 @@ void D3D::window_resized(const Window * window)
 {
 	if(device)
 	{
+		
 		// Release render target and depth-stencil view
         ID3D11RenderTargetView * null_rtv = NULL;
 		immediate_ctx->OMSetRenderTargets(1, &null_rtv, NULL);
@@ -183,8 +182,8 @@ void D3D::window_resized(const Window * window)
         }
         if (dsv)
         {
-            dsv.Release();
 			depth_srv.Release();
+            dsv.Release();
             dsv = nullptr;
         }
 
@@ -193,7 +192,7 @@ void D3D::window_resized(const Window * window)
             // Resize swap chain
 			swap_chain_desc.BufferDesc.Width = window->size().cx;
             swap_chain_desc.BufferDesc.Height = window->size().cy;
-			swap_chain->ResizeBuffers(swap_chain_desc.BufferCount, swap_chain_desc.BufferDesc.Width, 
+			auto hr = swap_chain->ResizeBuffers(swap_chain_desc.BufferCount, swap_chain_desc.BufferDesc.Width, 
                                         swap_chain_desc.BufferDesc.Height, swap_chain_desc.BufferDesc.Format, 
                                         swap_chain_desc.Flags);
 
@@ -220,35 +219,10 @@ void D3D::window_resized(const Window * window)
             depth_buffer->Release();
 
 			set_viewport(window->size());
+			TwWindowSize(window->size().cx, window->size().cy);
         }
 
 	}
-}
-void D3D::draw(const d3d::DrawOp & draw_op)
-{
-	unsigned int offset = 0;
-	immediate_ctx->IASetInputLayout(draw_op.il);
-	immediate_ctx->IASetVertexBuffers(0, 1, &draw_op.vb.p, &draw_op.vb_stride, &offset);
-	immediate_ctx->IASetIndexBuffer(draw_op.ib, DXGI_FORMAT_R32_UINT, 0);
-	immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	immediate_ctx->DrawIndexed(draw_op.ib_count, 0, 0);
-}
-
-CComPtr<ID3DX11Effect> D3D::loadEffect(const wstring& path)
-{
-	ifstream ifs(path.c_str(), ios::binary);
-	ifs.seekg(0, ios::end);
-	int byteSize = ifs.tellg();
-	ifs.seekg(0, ios::beg);
-	char* buffer = new char[byteSize];
-	ifs.read(buffer, byteSize);
-	
-	CComPtr<ID3DX11Effect> effect;	
-	auto hr = D3DX11CreateEffectFromMemory(buffer, byteSize, 0, device, &effect.p);
-	assert(SUCCEEDED(hr));
-	ifs.close();
-	delete [] buffer;
-	return effect;
 }
 void D3D::create_shaders_and_il(const wchar_t * file, 
 	ID3D11VertexShader** vs, 
@@ -327,8 +301,8 @@ namespace d3d
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
 		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
-			//D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
-			//| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
+			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
+			| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
 			, 0, 0, &shader_bin, &error_bin, nullptr);
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
 		{

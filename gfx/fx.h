@@ -9,7 +9,7 @@ void zero(T* ptr)
 }
 namespace fx
 {
-
+	
 	struct FXContext
 	{		
 		CComPtr<VertexShader> vs;
@@ -49,9 +49,20 @@ namespace fx
 	typedef ID3D11RenderTargetView Depth;
 	typedef ID3D11RenderTargetView Target;
 	typedef ID3D11ShaderResourceView Resource;
+	typedef ID3D11UnorderedAccessView UAVResource;
 	//blur, highpass, scale, ...
+
+
+	struct FXEnvironment;
+	struct GpuEnvironment;
+	void make_fx_env(Gfx* gfx, FXEnvironment* env);
+	void make_gpu_env(Gfx* gfx, GpuEnvironment* env);
 	struct FXEnvironment
 	{
+		void initialize(D3D& d3d)
+		{
+			make_fx_env(&d3d, this);
+		}
 		BlurContext blur_ctx;
 		FXContext resolve_ctx;
 		FXContext lum_highpass_ctx;
@@ -61,6 +72,12 @@ namespace fx
 	//d3d states, etc
 	struct GpuEnvironment
 	{
+		void initialize(D3D& d3d)
+		{
+			make_gpu_env(&d3d, this);
+		}
+		CComPtr<ID3D11DepthStencilState> invertedDSS;
+		CComPtr<ID3D11DepthStencilState> notestDSS;
 		CComPtr<ID3D11SamplerState> aniso_sampler;
 		CComPtr<ID3D11SamplerState> linear_sampler;
 		CComPtr<ID3D11BlendState> additive_blend;
@@ -74,10 +91,75 @@ namespace fx
 		GfxProfiler gfx_profiler;
 		int vp_w, vp_h;
 	};
+	struct DiffusionDof
+	{
+		CBuffer<d3d::cbuffers::DDofCB> dofCB;
+		FXEnvironment* fxEnvironment;
+		GpuEnvironment* gpuEnvironment;
+		CComPtr<ComputeShader> pass1H;
+		CComPtr<ComputeShader> pass2H;
+		CComPtr<ComputeShader> pass1V;
+		CComPtr<ComputeShader> pass2V;
+		bool gaussianBlur;
 
-	
-	void make_fx_env(Gfx* gfx, FXEnvironment* env);
-	void make_gpu_env(Gfx* gfx, GpuEnvironment* env);
+		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
+		{
+			gaussianBlur = false;
+			dofCB.initialize(*gfx);
+			this->gpuEnvironment = gpuEnvironment;
+			this->fxEnvironment = fxEnvironment;
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1.hlsl", "csPass1H", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1H);
+			}
+			{
+				CComPtr<ID3D10Blob> pass2Blob = d3d::load_shader(L"shaders/DiffusionDofPass2.hlsl", "csPass2H", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass2Blob->GetBufferPointer(), pass2Blob->GetBufferSize(), nullptr, &pass2H);
+			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1.hlsl", "csPass1V", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1V);
+			}
+			{
+				CComPtr<ID3D10Blob> pass2Blob = d3d::load_shader(L"shaders/DiffusionDofPass2.hlsl", "csPass2V", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass2Blob->GetBufferPointer(), pass2Blob->GetBufferSize(), nullptr, &pass2V);
+			}
+			TwBar *bar = TwNewBar("Diffusion Dof");
+			dofCB.data.coc.x = 30.f;
+			TwAddVarRW(bar, "COC", TW_TYPE_FLOAT, 
+				&dofCB.data.coc.x, "min=0.01 max=100 step=0.1");
+			TwAddVarRW(bar, "Use Gaussian Blur", TW_TYPE_BOOLCPP, 
+				&gaussianBlur, "");
+		}
+		void execute(Gfx* gfx, 
+			Resource* inputColor, 
+			Resource* inputDepth, 
+			Texture2D* scratchABC,
+			Texture2D* scratchD,
+			Texture2D* outputDof1,
+			Texture2D* outputDof2);
+	};
+	struct Bokeh
+	{
+		CComPtr<VertexShader> vs;
+		CComPtr<PixelShader> ps;
+		CComPtr<GeometryShader> gs;
+		GpuEnvironment* gpuEnvironment;
+		CBuffer<d3d::cbuffers::BokehCB> bokehCB;
+		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment) 
+		{
+			bokehCB.initialize(*gfx);
+			this->gpuEnvironment = gpuEnvironment;
+			gfx->create_shaders_and_il(L"shaders/Bokeh.hlsl", &vs.p, &ps.p, &gs.p);
+
+
+			TwBar *bar = TwNewBar("Bokeh");
+			bokehCB.data.cocPower.x = 30.f;
+			TwAddVarRW(bar, "COC Power", TW_TYPE_FLOAT, 
+				&bokehCB.data.cocPower, "");
+		}
+		void execute(Gfx* gfx, Resource* color, Resource* inputDepth, Target* outputDof );
+	};
 
 	void make_ssr_ctx(Gfx* gfx, SSRContext* ctx);
 	void make_tonemap_ctx(Gfx* gfx, FXContext* ctx);
@@ -112,7 +194,8 @@ namespace fx
 		Resource* albedo, 
 		Resource* normal,
 		Resource* depth,
-		d3d::cbuffers::ShadeGBufferDebugCB* gbuffer_debug_cb,
+		Resource* debugRef,
+		d3d::cbuffers::ShadeGBufferCB* gbuffer_debug_cb,
 		Target* target);
 	void bloom(Gfx* gfx, 
 		const GpuEnvironment* env,

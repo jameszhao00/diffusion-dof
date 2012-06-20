@@ -33,6 +33,7 @@ LRESULT CALLBACK MessageProc(HWND wnd, UINT message, WPARAM wParam, LPARAM lPara
 			}
 		case WM_SIZE: // Window size has been changed
 			active_windows[wnd]->call_resize_callback();
+			active_windows[wnd]->resizeCounter++;
 			return 0;
 		case WM_CHAR:
 			if (wParam == VK_ESCAPE)
@@ -60,6 +61,7 @@ void Window::init(HINSTANCE instance)
 	UpdateWindow(handle);	
 
 	active_windows[handle] = this;
+		
 }
 	
 void Window::call_resize_callback()
