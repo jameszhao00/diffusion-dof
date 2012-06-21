@@ -1,7 +1,4 @@
-Texture2D<float3> g_bc;
-Texture2D<float3> g_d;
-//for debugging
-Texture2D<float3> g_color;
+Texture2D<uint4> g_bcd;
 
 RWTexture2D<float4> g_output;
 
@@ -9,12 +6,20 @@ cbuffer DDofCB
 {
 	float4 g_coc;
 };
+void ddofUnpack(uint4 input, out float b, out float c, out float3 d)
+{
+	d = float3(f16tof32(input.x), f16tof32(input.x >> 16), asfloat(input.y));
+	b = asfloat(input.z);
+	c = asfloat(input.w);
+}
+
 void ddofPass2(int2 coord0, int2 coordDelta, int numItems)
 {
 	int2 coordLast = coord0 + (numItems - 1) * coordDelta;
-
-	float bN = g_bc[coordLast].y;
-	float3 dN = g_d[coordLast];
+	float cN = 0;
+	float bN = 0;// = g_bc[coordLast].y;
+	float3 dN = 0;// = g_d[coordLast];
+	ddofUnpack(g_bcd[coordLast], bN, cN, dN);
 	float3 xN = dN / bN;
 	g_output[coordLast] = float4(xN, 1);
 	float3 xNPlusTwo = 0;
@@ -26,9 +31,9 @@ void ddofPass2(int2 coord0, int2 coordDelta, int numItems)
 		xNPlusOne = xN;
 		//depends on primary direction
 		int2 coordN = coord0 + i * coordDelta;
-		bN = g_bc[coordN].y;
-		float cN = g_bc[coordN].z;
-		dN = g_d[coordN];
+					
+		ddofUnpack(g_bcd[coordN], bN, cN, dN);
+		
 		xN = (dN - xNPlusOne * cN) / bN;	
 		g_output[coordN] = float4(xN, 1);
 	}
@@ -38,7 +43,7 @@ void csPass2H( uint3 DTid : SV_DispatchThreadID )
 {
 	float2 size;
 	//work horizontally.. very inefficient
-	g_bc.GetDimensions(size.x, size.y);
+	g_bcd.GetDimensions(size.x, size.y);
 	
 	if(DTid.x > (size.y - 1)) return; //we're out of bounds
 
@@ -50,7 +55,7 @@ void csPass2V( uint3 DTid : SV_DispatchThreadID )
 {
 	float2 size;
 	//work horizontally.. very inefficient
-	g_bc.GetDimensions(size.x, size.y);
+	g_bcd.GetDimensions(size.x, size.y);
 	
 	if(DTid.x > (size.x - 1)) return; //we're out of bounds
 

@@ -643,7 +643,8 @@ namespace fx
 					gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
 					Resource* resources[] = {scratchABC->srv, scratchD->srv, inputColor};
 					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					UAVResource* uavs[] = {outputDof1->uav};
+					//HACK: Debug
+					UAVResource* uavs[] = {outputDof2->uav};
 					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
 				}
@@ -655,7 +656,7 @@ namespace fx
 					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
 				}
 			}
-			if(1)
+			if(0)
 			{
 				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 				//vertical

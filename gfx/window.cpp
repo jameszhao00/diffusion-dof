@@ -20,7 +20,7 @@ void Window::initialize(HINSTANCE instance)
 {	
 
 	SDL_Init(SDL_INIT_VIDEO);
-	SDL_SetVideoMode(800, 600, SDL_GetVideoInfo()->vfmt->BitsPerPixel, SDL_RESIZABLE);
+	SDL_SetVideoMode(1600, 800, SDL_GetVideoInfo()->vfmt->BitsPerPixel, SDL_RESIZABLE);
 	handle = GetActiveWindow();
 }
 	
