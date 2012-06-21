@@ -13,6 +13,18 @@
 #define BLUE float4(0, 0, 1, 1)
 #define BACK float3(0, 0, -1)
 
+/* depth of field stuff */
+float beta(float coc, int iterations)
+{
+	return coc * coc * (1.f/iterations);
+}
+float z2coc(float sampleZ, float aperture, float focalLength, float focalPlane)
+{
+	//from http://http.developer.nvidia.com/GPUGems/gpugems_ch23.html
+	return abs(aperture * (focalLength * (sampleZ - focalPlane)) /
+		(sampleZ * (focalPlane - focalLength)));
+
+}
 
 float unproject_z(float z, float2 proj_constants)
 {
