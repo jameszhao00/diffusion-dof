@@ -1,3 +1,4 @@
+
 Texture2D<uint4> g_bcd;
 
 RWTexture2D<float4> g_output;

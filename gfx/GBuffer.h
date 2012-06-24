@@ -12,5 +12,7 @@ struct GBuffer
 	Texture2D scratch[4];
 
 	Texture2D scratchABC;
-	Texture2D scratchD;
+	Texture2D scratchABCD[2];
+
+	Texture2D ddofOutputStructureBuffer;
 };

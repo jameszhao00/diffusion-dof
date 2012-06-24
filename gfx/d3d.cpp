@@ -230,19 +230,19 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 	ID3D11InputLayout** il ,
 	gfx::VertexTypes type)
 {
-	auto vs_blob = d3d::load_shader(file, "vs", "vs_4_0");	
+	auto vs_blob = d3d::load_shader(file, "vs", "vs_5_0");	
 	auto l = vs_blob->GetBufferSize();
 	device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, vs);
 	
 	d3d::name(*vs, file);
-	auto ps_blob = d3d::load_shader(file, "ps", "ps_4_0");
+	auto ps_blob = d3d::load_shader(file, "ps", "ps_5_0");
 	device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, ps);
 	
 	d3d::name(*ps, file);
 	ps_blob->Release();
 	if(gs != nullptr)
 	{
-		auto gs_blob = d3d::load_shader(file, "gs", "gs_4_0");
+		auto gs_blob = d3d::load_shader(file, "gs", "gs_5_0");
 		device->CreateGeometryShader(gs_blob->GetBufferPointer(), gs_blob->GetBufferSize(), nullptr, gs);
 		gs_blob->Release();
 	

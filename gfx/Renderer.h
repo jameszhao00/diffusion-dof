@@ -29,6 +29,8 @@ private:
 private:	
 	fx::Bokeh pointSpriteBokehDof;
 	fx::DiffusionDof diffusionDof;
+	fx::DiffusionDofCR diffusionDofCR;
+	fx::VisualizeStructuredBuffer visualizeStructuredBuffer;
 	Effect animatedGeometryDrawer;
 	Effect standardGeometryDrawer;
 	fx::GpuEnvironment gpuEnv;

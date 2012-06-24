@@ -30,6 +30,8 @@ void Renderer::initialize( D3D& pd3d )
 	standardGeometryDrawer.initialize(pd3d, L"shaders/standard.hlsl", gfx::eStandard);
 	pointSpriteBokehDof.initialize(d3d, &gpuEnv);
 	diffusionDof.initialize(d3d, &gpuEnv, &fxEnvironment);
+	diffusionDofCR.initialize(d3d, &gpuEnv, &fxEnvironment);
+	visualizeStructuredBuffer.initialize(d3d, &gpuEnv, &fxEnvironment);
 
 	IFW1Factory *drawtext_fac;
 	HRESULT hResult = FW1CreateFactory(FW1_VERSION, &drawtext_fac);
@@ -113,11 +115,17 @@ void Renderer::deferredPass( float3 lightPosition )
 
 void Renderer::postFxPass()
 {
-	gpuEnv.gfx_profiler.begin_block(L"postFX pass");
+	gpuEnv.gfx_profiler.begin_block(L"ddof");
 
 	diffusionDof.execute(d3d, gbuffer.scratch[0].srv, d3d->depth_srv, 
-		&gbuffer.scratchABC, &gbuffer.scratchD, &gbuffer.scratch[1], &gbuffer.scratch[2]);
+		&gbuffer.scratchABC, &gbuffer.scratch[2]);
 
+	//diffusionDofCR.execute(d3d, gbuffer.scratch[0].srv, d3d->depth_srv, 
+	//	&gbuffer.scratchABCD[0], &gbuffer.scratchABCD[1], &gbuffer.ddofOutputStructureBuffer);
+	gpuEnv.gfx_profiler.end_block();
+	//visualizeStructuredBuffer.execute(d3d, &gbuffer.ddofOutputStructureBuffer, gbuffer.scratch[0].srv,
+	//	d3d->back_buffer_rtv);
+	gpuEnv.gfx_profiler.begin_block(L"tonemap");
 	//pointSpriteBokehDof.execute(d3d, gbuffer.scratch[0].srv, d3d->depth_srv, gbuffer.scratch[1].rtv);
 	fx::tonemap(d3d, &gpuEnv, &tonemap_ctx, gbuffer.scratch[2].srv, d3d->back_buffer_rtv);
 	gpuEnv.gfx_profiler.end_block();

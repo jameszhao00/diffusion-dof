@@ -27,7 +27,7 @@ namespace d3d
 	{
 		struct DDofCB
 		{
-			float4 coc;
+			float4 params;
 		};
 		struct BokehCB
 		{
@@ -176,14 +176,46 @@ struct Texture2D
 		float color[4] = {r, g, b, a};
 		context->ClearRenderTargetView(rtv, color);
 	}
+	void initializeSB(D3D& d3d, int byteSize, int stride)
+	{
+		if(uav) { uav.Release(); uav = nullptr; }
+		if(buffer) { buffer.Release(); buffer = nullptr; }
+
+		D3D11_BUFFER_DESC sbDesc;
+		sbDesc.BindFlags            = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+		sbDesc.CPUAccessFlags       = 0;
+		sbDesc.MiscFlags            = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		sbDesc.StructureByteStride  = stride;
+		sbDesc.ByteWidth            = byteSize;
+		sbDesc.Usage                = D3D11_USAGE_DEFAULT;
+		d3d.device->CreateBuffer(&sbDesc, 0, &buffer.p);
+		
+		D3D11_UNORDERED_ACCESS_VIEW_DESC sbUAVDesc;
+		sbUAVDesc.Buffer.FirstElement       = 0;
+		sbUAVDesc.Buffer.Flags              = 0;
+		sbUAVDesc.Buffer.NumElements        = byteSize / stride;
+		sbUAVDesc.Format                    = DXGI_FORMAT_UNKNOWN;
+		sbUAVDesc.ViewDimension             = D3D11_UAV_DIMENSION_BUFFER;
+		d3d.device->CreateUnorderedAccessView(buffer, &sbUAVDesc, &uav.p);
+
+		
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+        srvDesc.Buffer.ElementOffset = 0;
+        srvDesc.Buffer.ElementWidth = byteSize / stride;
+        d3d.device->CreateShaderResourceView(buffer, &srvDesc, &srv.p);
+
+	}
 	void initialize(D3D& d3d, int w, int h, bool createUav = false)
 	{
 		assert(isConfigured);
 
 		if(srv.p) { srv.Release(); srv = nullptr; }
 		if(rtv) { rtv.Release(); rtv = nullptr; }
-		if(texture) { texture.Release(); texture = nullptr; }
 		if(uav) { uav.Release(); uav = nullptr; }
+
+		if(texture) { texture.Release(); texture = nullptr; }
 		
 		D3D11_TEXTURE2D_DESC desc;
 		ZeroMemory(&desc, sizeof(desc));
@@ -218,6 +250,7 @@ struct Texture2D
 	int mips;
 	DXGI_FORMAT format;
 	string name;
+	CComPtr<ID3D11Buffer> buffer;
 	CComPtr<ID3D11UnorderedAccessView> uav;
 	CComPtr<ID3D11ShaderResourceView> srv;
 	CComPtr<ID3D11RenderTargetView> rtv;

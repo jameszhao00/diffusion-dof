@@ -91,6 +91,53 @@ namespace fx
 		GfxProfiler gfx_profiler;
 		int vp_w, vp_h;
 	};
+	
+	struct VisualizeStructuredBuffer
+	{
+		FXEnvironment* fxEnvironment;
+		GpuEnvironment* gpuEnvironment;
+		CComPtr<VertexShader> vs;
+		CComPtr<PixelShader> ps;
+		bool gaussianBlur;
+
+		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
+		{
+			this->gpuEnvironment = gpuEnvironment;
+			this->fxEnvironment = fxEnvironment;
+			{								
+				gfx->create_shaders_and_il(L"shaders/VisualizeStructuredBuffer.hlsl", 
+					&vs.p, 
+					&ps.p,
+					nullptr, 
+					nullptr,
+					gfx::VertexTypes::eFSQuad);	
+			}
+		}
+		void execute(Gfx* gfx, 
+			Texture2D* structuredBuffer,
+			Resource* dummyScreenSize,
+			Target* output)
+		{			
+			Target* targets[1] = {output};
+			
+			uint zero = 0;
+			
+			gfx->immediate_ctx->OMSetRenderTargets(1, targets, nullptr);
+
+			
+			Resource* resource[2] = {dummyScreenSize, structuredBuffer->srv};			
+			gfx->immediate_ctx->PSSetShaderResources(0, 2, resource);
+
+			gfx->immediate_ctx->IASetInputLayout(gpuEnvironment->fsquad_il);
+			gfx->immediate_ctx->IASetVertexBuffers(0, 1, &gpuEnvironment->fsquad_vb.p, &gpuEnvironment->fsquad_stride, 
+				&gpuEnvironment->zero);
+
+			gfx->immediate_ctx->VSSetShader(vs, nullptr, 0);
+			gfx->immediate_ctx->PSSetShader(ps, nullptr, 0);
+
+			gfx->immediate_ctx->Draw(6, 0);
+		}
+	};
 	struct DiffusionDof
 	{
 		CBuffer<d3d::cbuffers::DDofCB> dofCB;
@@ -125,19 +172,67 @@ namespace fx
 				gfx->device->CreateComputeShader(pass2Blob->GetBufferPointer(), pass2Blob->GetBufferSize(), nullptr, &pass2V);
 			}
 			TwBar *bar = TwNewBar("Diffusion Dof");
-			dofCB.data.coc.x = 30.f;
-			TwAddVarRW(bar, "COC", TW_TYPE_FLOAT, 
-				&dofCB.data.coc.x, "min=0.01 max=100 step=0.01");
-			TwAddVarRW(bar, "Use Gaussian Blur", TW_TYPE_BOOLCPP, 
-				&gaussianBlur, "");
+			dofCB.data.params.x = 5;
+			dofCB.data.params.y = 1;
+			TwAddVarRW(bar, "Focal Plane", TW_TYPE_FLOAT, 
+				&dofCB.data.params.x, "min=0.01 max=100 step=0.01");
+			TwAddVarRW(bar, "Iterations", TW_TYPE_FLOAT, 
+				&dofCB.data.params.y, "min=1 max=18 step=1");
 		}
 		void execute(Gfx* gfx, 
 			Resource* inputColor, 
 			Resource* inputDepth, 
-			Texture2D* scratchABC,
-			Texture2D* scratchD,
-			Texture2D* outputDof1,
+			Texture2D* scratchBCD,
 			Texture2D* outputDof2);
+	};
+	
+	struct DiffusionDofCR
+	{
+		CBuffer<d3d::cbuffers::DDofCB> dofCB;
+		FXEnvironment* fxEnvironment;
+		GpuEnvironment* gpuEnvironment;
+		CComPtr<ComputeShader> pass1H;
+		CComPtr<ComputeShader> pass1HP0;
+		CComPtr<ComputeShader> pass2H;
+		CComPtr<ComputeShader> pass2HLastPass;
+		bool gaussianBlur;
+
+		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
+		{
+			gaussianBlur = false;
+			dofCB.initialize(*gfx);
+			this->gpuEnvironment = gpuEnvironment;
+			this->fxEnvironment = fxEnvironment;
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1H", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1H);
+			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1HPass0", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1HP0);
+			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2H", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2H);
+			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HPassLast", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HLastPass);
+			}
+			TwBar *bar = TwNewBar("Diffusion Dof CR");
+			dofCB.data.params.x = 5;
+			dofCB.data.params.y = 1;
+			TwAddVarRW(bar, "Focal Plane", TW_TYPE_FLOAT, 
+				&dofCB.data.params.x, "min=0.01 max=100 step=0.01");
+			TwAddVarRW(bar, "Iterations", TW_TYPE_FLOAT, 
+				&dofCB.data.params.y, "min=1 max=18 step=1");
+		}
+		void execute(Gfx* gfx, 
+			Resource* inputColor, 
+			Resource* inputDepth, 
+			Texture2D* scratchABCD1,
+			Texture2D* scratchABCD2,
+			Texture2D* outputDof);
 	};
 	struct Bokeh
 	{

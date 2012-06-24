@@ -109,5 +109,8 @@
     <FxCompile Include=".\shaders\Bokeh.hlsl" />
     <FxCompile Include="shaders\DiffusionDofPass2.hlsl" />
     <FxCompile Include=".\shaders\DiffusionDofPass1.hlsl" />
+    <FxCompile Include="shaders\DiffusionDofPass1CR.hlsl" />
+    <FxCompile Include="shaders\DiffusionDofPass2CR.hlsl" />
+    <FxCompile Include="shaders\VisualizeStructuredBuffer.hlsl" />
   </ItemGroup>
 </Project>

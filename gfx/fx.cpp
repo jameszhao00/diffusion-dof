@@ -244,18 +244,18 @@ namespace fx
 
 	void make_blur_ctx(Gfx* gfx, BlurContext* ctx)
 	{		
-		auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_4_0");	
+		auto vs_blob = d3d::load_shader(L"shaders/blur.hlsl", "vs", "vs_5_0");	
 		gfx->device->CreateVertexShader(
 			vs_blob->GetBufferPointer(), 
 			vs_blob->GetBufferSize(), 
 			nullptr, 
 			&ctx->vs);
 		vs_blob->Release();
-		auto ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_x", "ps_4_0");
+		auto ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_x", "ps_5_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
 			ps_blob->GetBufferSize(), nullptr, &ctx->ps_h);
 		ps_blob->Release();
-		ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_y", "ps_4_0");
+		ps_blob = d3d::load_shader(L"shaders/blur.hlsl", "ps_blur_y", "ps_5_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
 			nullptr, &ctx->ps_v);
 		ps_blob->Release();	
@@ -455,7 +455,7 @@ namespace fx
 	void make_ssr_ctx( Gfx* gfx, SSRContext* ctx )
 	{
 
-		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_4_0");	
+		auto vs_blob = d3d::load_shader(L"shaders/ssr.hlsl", "vs", "vs_5_0");	
 		gfx->device->CreateVertexShader(
 			vs_blob->GetBufferPointer(), 
 			vs_blob->GetBufferSize(), 
@@ -463,26 +463,14 @@ namespace fx
 			&ctx->vs);
 		vs_blob->Release();
 
-		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_4_0");
+		auto ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "gen_samples_ps", "ps_5_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
 			ps_blob->GetBufferSize(), nullptr, &ctx->ps_gen_samples);
 		ps_blob->Release();
-		/*
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "combine_samples_ps", "ps_4_0");
-		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), 
-			ps_blob->GetBufferSize(), nullptr, &ctx->ps_combine_samples);
-		ps_blob->Release();
-		*/
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_ps", "ps_4_0");
+		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "shade_ps", "ps_5_0");
 		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
 			nullptr, &ctx->ps_shade);
 		ps_blob->Release();	
-		/*
-		ps_blob = d3d::load_shader(L"shaders/ssr.hlsl", "ps", "ps_4_0");
-		gfx->device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), 
-			nullptr, &ctx->ps_old);
-		ps_blob->Release();	
-		*/
 		ctx->uniforms = gfx->create_cbuffer<d3d::cbuffers::FSQuadCb>();
 	}
 
@@ -601,128 +589,48 @@ namespace fx
 	void DiffusionDof::execute( Gfx* gfx, 
 		Resource* inputColor, 
 		Resource* inputDepth, 
-		Texture2D* scratchABC,
-		Texture2D* scratchD,
-		Texture2D* outputDof1,
+		Texture2D* scratchBCD,
 		Texture2D* outputDof2)
 	{
-		if(gaussianBlur)
-		{
-			fx::blur(gfx, gpuEnvironment, &fxEnvironment->blur_ctx, eHorizontal, 8, inputColor, outputDof1->rtv);
-			fx::blur(gfx, gpuEnvironment, &fxEnvironment->blur_ctx, eVertical, 8, outputDof1->srv, outputDof2->rtv);
-		}
-		else
 		{
 			gfx->immediate_ctx->VSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
 			dofCB.sync();
+			
+			for(int i = 0; i < (int)dofCB.data.params.y; i++)
 			{
-				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
-				gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
 				//horizontal
-				int numThreadGroups = (int)ceil(gpuEnvironment->vp_h / 32.f);
-				//call pass 1
-				{
-					gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
-					Resource* resources[] = {inputDepth, inputColor};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
-				}
-				//cleanup
-				{
-					Resource* resources[] = {nullptr, nullptr};
-					UAVResource* uavs[] = {nullptr, nullptr};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-				}
-				//call pass 2
-				{
-					gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
-					Resource* resources[] = {scratchABC->srv, scratchD->srv, inputColor};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					//HACK: Debug
-					UAVResource* uavs[] = {outputDof2->uav};
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
-					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
-				}
-				//cleanup
-				{
-					Resource* resources[] = {nullptr, nullptr};
-					UAVResource* uavs[] = {nullptr, nullptr};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-				}
-			}
-			if(0)
-			{
-				gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
-				//vertical
-				int numThreadGroups = (int)ceil(gpuEnvironment->vp_w / 32.f);
-				//call pass 1
-				{
-					gfx->immediate_ctx->CSSetShader(pass1V, nullptr, 0);
-					Resource* resources[] = {inputDepth, outputDof1->srv};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
-				}
-				//cleanup
-				{
-					Resource* resources[] = {nullptr, nullptr};
-					UAVResource* uavs[] = {nullptr, nullptr};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-				}
-				//call pass 2
-				{
-					gfx->immediate_ctx->CSSetShader(pass2V, nullptr, 0);
-					Resource* resources[] = {scratchABC->srv, scratchD->srv};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					UAVResource* uavs[] = {outputDof2->uav};
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
-					gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
-				}
-				//cleanup
-				{
-					Resource* resources[] = {nullptr, nullptr};
-					UAVResource* uavs[] = {nullptr, nullptr};
-					gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
-				}
-			}
-			for(int i = 0; i < 0; i++)
-			{
 				{
 					gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 					gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
-					//horizontal
 					int numThreadGroups = (int)ceil(gpuEnvironment->vp_h / 32.f);
 					//call pass 1
 					{
 						gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
 						Resource* resources[] = {inputDepth, outputDof2->srv};
+						if(i == 0)
+						{
+							resources[1] = inputColor;
+						}
 						gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-						UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
-						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+						UAVResource* uavs[] = {scratchBCD->uav};
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 						gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
 					}
 					//cleanup
 					{
-						Resource* resources[] = {nullptr, nullptr};
-						UAVResource* uavs[] = {nullptr, nullptr};
-						gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+						Resource* resources[] = {nullptr, nullptr, nullptr};
+						UAVResource* uavs[] = {nullptr, nullptr, nullptr};
+						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
 					}
 					//call pass 2
 					{
 						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
-						Resource* resources[] = {scratchABC->srv, scratchD->srv, inputColor};
+						Resource* resources[] = {scratchBCD->srv, inputColor};
 						gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-						UAVResource* uavs[] = {outputDof1->uav};
+						UAVResource* uavs[] = {outputDof2->uav};
 						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 						gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
 					}
@@ -734,17 +642,17 @@ namespace fx
 						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
 					}
 				}
+				//vertical
 				{
 					gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
-					//vertical
 					int numThreadGroups = (int)ceil(gpuEnvironment->vp_w / 32.f);
 					//call pass 1
 					{
 						gfx->immediate_ctx->CSSetShader(pass1V, nullptr, 0);
-						Resource* resources[] = {inputDepth, outputDof1->srv};
+						Resource* resources[] = {inputDepth, outputDof2->srv};
 						gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
-						UAVResource* uavs[] = {scratchABC->uav, scratchD->uav};
-						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+						UAVResource* uavs[] = {scratchBCD->uav};
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 						gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
 					}
 					//cleanup
@@ -757,8 +665,8 @@ namespace fx
 					//call pass 2
 					{
 						gfx->immediate_ctx->CSSetShader(pass2V, nullptr, 0);
-						Resource* resources[] = {scratchABC->srv, scratchD->srv};
-						gfx->immediate_ctx->CSSetShaderResources(0, 2, resources);
+						Resource* resources[] = {scratchBCD->srv};
+						gfx->immediate_ctx->CSSetShaderResources(0, 1, resources);
 						UAVResource* uavs[] = {outputDof2->uav};
 						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 						gfx->immediate_ctx->Dispatch(numThreadGroups, 1, 1);
@@ -774,5 +682,98 @@ namespace fx
 			}
 		}
 	}
+	
 
+	void DiffusionDofCR::execute( Gfx* gfx, 
+		Resource* inputColor, 
+		Resource* inputDepth, 
+		Texture2D* scratchABCD1,
+		Texture2D* scratchABCD2,
+		Texture2D* outputDof)
+	{
+		{
+			gfx->immediate_ctx->VSSetShader(nullptr, nullptr, 0);
+			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
+			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
+			dofCB.sync();
+			
+			int numPasses = (int)glm::floor(glm::log2((float)gpuEnvironment->vp_w+1.f));
+			gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
+			gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
+			Texture2D* scratchABCDs[] = {scratchABCD1, scratchABCD2};
+			{
+				for(int passIdx = 0; passIdx < numPasses; passIdx++)
+				{
+					//cout << "executing ddof CR H pass idx = " << passIdx << " "; 
+					dofCB.data.params.z = passIdx;
+					dofCB.sync();
+
+					if(passIdx == 0) gfx->immediate_ctx->CSSetShader(pass1HP0, nullptr, 0);
+					else gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
+
+					Resource* resources[] = {inputDepth, inputColor, scratchABCDs[passIdx % 2]->srv};		
+					gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);		
+
+					UAVResource* uavs[] = {scratchABCDs[(passIdx + 1) % 2]->uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+
+					float2 numThreads(
+						glm::floor((gpuEnvironment->vp_w + 1.f) / pow(2.f, passIdx + 1)),
+						gpuEnvironment->vp_h
+						);
+					//cout << "thread count = " << numThreads[0] << ", " << numThreads[1] << endl;
+					float2 numGroups(glm::ceil(numThreads / float2(16)));
+					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
+					
+					//cleanup
+					{
+						Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
+						UAVResource* uavs[] = {nullptr, nullptr, nullptr};
+						gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
+						gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+					}	
+				} 
+				
+				for(int passIdx = numPasses - 1; passIdx > -1; passIdx--)
+				{
+					dofCB.data.params.z = passIdx;
+					dofCB.sync();
+
+					if(passIdx == numPasses - 1)
+					{
+						gfx->immediate_ctx->CSSetShader(pass2HLastPass, nullptr, 0);
+						Resource* resources[] = {scratchABCDs[(passIdx) % 2]->srv, scratchABCDs[(passIdx + 1) % 2]->srv, nullptr};		
+						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+					}
+					else
+					{						
+						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
+						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, nullptr, nullptr};		
+						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+					}
+
+					UAVResource* uavs[] = {outputDof->uav, nullptr, nullptr};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+					
+					float2 numThreads(
+						glm::floor((gpuEnvironment->vp_w + 1.f) / pow(2.f, passIdx + 1)),
+						gpuEnvironment->vp_h
+						);
+					//cout << "thread count = " << numThreads[0] << ", " << numThreads[1] << endl;
+					float2 numGroups(glm::ceil(numThreads / float2(16)));
+					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
+				}
+				
+				//cleanup
+				{
+					Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr, nullptr};
+					gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+				}	
+			}
+		}
+	}
 };
