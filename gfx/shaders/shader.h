@@ -14,6 +14,7 @@
 #define BLUE float4(0, 0, 1, 1)
 #define BACK float3(0, 0, -1)
 
+
 /* depth of field stuff */
 float beta(float coc, int iterations)
 {

@@ -6,6 +6,7 @@ struct ABCDEntry
 	float c;
 	float3 d;
 };
+
 void ddofUnpack(uint4 input, out float a, out float b, out float c, out float3 d)
 {
 	//works
@@ -35,31 +36,33 @@ uint4 ddofPack(float a, float b, float c, float3 d)
 		(asuint(c) & 0xffffffc0) | (f32tof16(d.z) >> 12) & 0x3F
 		);
 }
-
+//works
 int coordNOffset(int i, int passIdx)
 {
+	//i*2^(p+1)+2^(p+1)-2+1
 	int k = pow(2, passIdx+1);
 	return i * k + k - 2 + 1;
 }
+//works
 int2 calcXYDelta(int2 rawXyDelta, int passIdx)
 {
 	return rawXyDelta * pow(2, passIdx + 1);
 }
 
-struct ABCD
+struct ABCDTriple
 {
 	float3 a;
 	float3 b;
 	float3 c;
 	float3x3 d;
 };
-ABCD readABCD(Texture2D<uint4> abcdTex, int2 xy, int2 xyDelta)
+ABCDTriple readABCD(Texture2D<uint4> abcdTex, int2 xy, int2 xyDelta)
 {
 	//out of bounds = read 0
 	int2 xy0 = xy - xyDelta;
 	int2 xy1 = xy;
 	int2 xy2 = xy + xyDelta;
-	ABCD abcd;
+	ABCDTriple abcd;
 	ddofUnpack(abcdTex[xy0], abcd.a[0], abcd.b[0], abcd.c[0], abcd.d[0]);
 	ddofUnpack(abcdTex[xy1], abcd.a[1], abcd.b[1], abcd.c[1], abcd.d[1]);
 	ddofUnpack(abcdTex[xy2], abcd.a[2], abcd.b[2], abcd.c[2], abcd.d[2]);
@@ -78,10 +81,10 @@ float betaForward(Texture2D<float> depthTex, int2 size, int2 xy, int2 forwardXyD
 	float betaCurrent = beta(cocCurrent, iterations);
 	return min(betaNext, betaCurrent);
 }
-ABCD computeABCD(Texture2D<float> depthTex, Texture2D<float3> colorTex, int2 xy, int2 xyDelta, int2 size,				  
+ABCDTriple computeABCD(Texture2D<float> depthTex, Texture2D<float3> colorTex, int2 xy, int2 xyDelta, int2 size,				  
 				  float2 projConstants, float focalPlane, int iterations)
 {
-	ABCD abcd;
+	ABCDTriple abcd;
 	//TODO: do boundary testing
 	float betaA = betaForward(depthTex, size, xy - 2 * xyDelta, xyDelta, projConstants, focalPlane, iterations);
 	//n-1 <-> n

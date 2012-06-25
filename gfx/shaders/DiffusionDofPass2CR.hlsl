@@ -38,11 +38,13 @@ void csPass2HPassLast(uint3 DTid : SV_DispatchThreadID)
 	if(xy.y > (size.y - 1)) return; //we're out of bounds	
 		
 	ABCDEntry abcd = ddofUnpack(g_abcdIn[xy]);
+	//0*yA + b*yB + 0*yC = xB
+	//-> yB = xB / b -> y = x/b
 	float3 y = abcd.d / abcd.b;
 			
-	g_output[xy.y * size.x + xy.x].color = y.xyzz;
+	g_output[xy.y * size.x + xy.x].color = y.xyz;
 	//HACK:
-	//g_output[xy.y * size.x + xy.x].color = (passIdx == g_ddofVals.w) * y.xyzz;
+	//g_output[xy.y * size.x + xy.x].color = (passIdx <= g_ddofVals.w);
 
 }
 [numthreads(16, 16, 1)]
@@ -72,7 +74,7 @@ void csPass2H(uint3 DTid : SV_DispatchThreadID)
 	float3 yB = (abcd.d - abcd.c * yC - abcd.a * yA) / abcd.b;
 	g_output[xyB.y * size.x + xyB.x].color = yB;
 	//HACK:
-	//g_output[xyB.y * size.x + xyB.x].color = (passIdx == g_ddofVals.w) * yB.xyzz;
+	//g_output[xyB.y * size.x + xyB.x].color = (passIdx <= g_ddofVals.w);
 }
 
 //we have to reconstruct a,b,c,d
@@ -96,7 +98,7 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 	int2 xyA = xyB - calcXYDelta(int2(1, 0), passIdx);
 	int2 xyC = xyB + calcXYDelta(int2(1, 0), passIdx);
 	
-	ABCD abcd = computeABCD(g_depth, g_color, xyB, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
+	ABCDTriple abcd = computeABCD(g_depth, g_color, xyB, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
 	
 	float3 yA = g_output[xyA.y * size.x + xyA.x].color;
 	float3 yC = g_output[xyC.y * size.x + xyC.x].color;
@@ -106,5 +108,5 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 	float3 yB = (abcd.d[1] - abcd.c[1] * yC - abcd.a[1] * yA) / abcd.b[1];
 	g_output[xyB.y * size.x + xyB.x].color = yB;
 	//HACK:
-	//g_output[xyB.y * size.x + xyB.x].color = (passIdx == g_ddofVals.w) * yB.xyzz;
+	//g_output[xyB.y * size.x + xyB.x].color = (passIdx <= g_ddofVals.w);
 }

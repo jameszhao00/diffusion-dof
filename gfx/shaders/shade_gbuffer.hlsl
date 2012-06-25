@@ -50,6 +50,8 @@ VS2PS vs(float3 position : POSITION)
 float4 ps( VS2PS IN ) : SV_TARGET
 {	
 	int3 coord = int3(IN.position.xy, 0);
+	//HACK:
+	//return coord.x == abs(int(g_light_dir_ws.x));
 	float4 vs_light_pos = mul(float4(g_light_dir_ws.xyz, 1), g_view);
 	float zNdc = g_depth.Load(coord, 0).x;
 	float vs_z = unproject_z(zNdc, g_proj_constants);

@@ -300,8 +300,8 @@ namespace d3d
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
 		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
-			//D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
-			//| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
+			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
+			| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
 			, 0, 0, &shader_bin, &error_bin, nullptr);
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
 		{

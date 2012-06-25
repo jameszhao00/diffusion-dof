@@ -19,7 +19,7 @@ cbuffer FSQuadCB : register(b1)
 	float4 g_debug_vars;
 	float4x4 g_proj;
 };
-void updateABCD(int2 xy, ABCD abcd)
+void updateABCD(int2 xy, ABCDTriple abcd)
 {
 	//b will never be 0 unless it doesn't exist!
 
@@ -48,8 +48,8 @@ void csPass1H(uint3 DTid : SV_DispatchThreadID)
 	int2 xy = int2(coordNOffset(DTid.x, passIdx), DTid.y);
 	if(xy.x > (size.x - 1)) return; //we're out of bounds	
 	if(xy.y > (size.y - 1)) return; //we're out of bounds	
-
-	ABCD abcd = readABCD(g_abcdIn, xy, calcXYDelta(int2(1, 0), passIdx));
+	//calcXYDelta - we're looking for spacing at passIdx - 1
+	ABCDTriple abcd = readABCD(g_abcdIn, xy, calcXYDelta(int2(1, 0), passIdx - 1));
 	updateABCD(xy, abcd);
 }
 [numthreads(16, 16, 1)]
@@ -64,6 +64,6 @@ void csPass1HPass0(uint3 DTid : SV_DispatchThreadID)
 	if(xy.x > (size.x - 1)) return; //we're out of bounds	
 	if(xy.y > (size.y - 1)) return; //we're out of bounds	
 
-	ABCD abcd = computeABCD(g_depth, g_color, xy, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
+	ABCDTriple abcd = computeABCD(g_depth, g_color, xy, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
 	updateABCD(xy, abcd);
 }

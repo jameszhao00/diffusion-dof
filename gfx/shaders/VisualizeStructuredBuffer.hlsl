@@ -26,6 +26,7 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 	//return  abs(a - 1) < 0.01 && abs(b - 2) < 0.01 && abs(c - 3) < 0.01;
 	g_source.GetDimensions(size.x, size.y);	
 	//return d.xyzz;
-	return float4(g_debugIn[floor(position.y) * size.x + floor(position.x)].color.xyz, 1);
+	float3 color = g_debugIn[floor(position.y) * size.x + floor(position.x)].color.xyz;
+	return float4(color, 1);
 
 }
