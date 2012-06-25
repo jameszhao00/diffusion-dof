@@ -1,7 +1,7 @@
 #include "DiffusionDof.h"
 Texture2D<float> g_depth : register(t0);
 Texture2D<float3> g_color : register(t1);
-//TODO: out of bound reads should return 0! required for proper m[] behavior
+
 Texture2D<uint4> g_abcdIn : register(t2);
 RWTexture2D<uint4> g_abcdOut : register(u0);
 //use odd entries
@@ -11,6 +11,8 @@ cbuffer DDofCB
 	//y = # iterations
 	//z = passidx
 	float4 g_ddofVals;
+	//x,y = image width/height
+	float4 g_ddofVals2;
 };
 cbuffer FSQuadCB : register(b1)
 {	
@@ -41,13 +43,13 @@ void updateABCD(int2 xy, ABCDTriple abcd)
 void csPass1H(uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
-	float2 size;
-	g_depth.GetDimensions(size.x, size.y);
+	float2 size = g_ddofVals2.xy;
+	//g_depth.GetDimensions(size.x, size.y);
 	int i = DTid.x;
 
 	int2 xy = int2(coordNOffset(DTid.x, passIdx), DTid.y);
-	if(xy.x > (size.x - 1)) return; //we're out of bounds	
-	if(xy.y > (size.y - 1)) return; //we're out of bounds	
+	//if(xy.x > (size.x - 1)) return; //we're out of bounds	
+	//if(xy.y > (size.y - 1)) return; //we're out of bounds	
 	//calcXYDelta - we're looking for spacing at passIdx - 1
 	ABCDTriple abcd = readABCD(g_abcdIn, xy, calcXYDelta(int2(1, 0), passIdx - 1));
 	updateABCD(xy, abcd);
@@ -56,13 +58,13 @@ void csPass1H(uint3 DTid : SV_DispatchThreadID)
 void csPass1HPass0(uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
-	float2 size;
-	g_depth.GetDimensions(size.x, size.y);
+	float2 size = g_ddofVals2.xy;
+	//g_depth.GetDimensions(size.x, size.y);
 	int i = DTid.x;
 
 	int2 xy = int2(coordNOffset(DTid.x, 0), DTid.y);
-	if(xy.x > (size.x - 1)) return; //we're out of bounds	
-	if(xy.y > (size.y - 1)) return; //we're out of bounds	
+	//if(xy.x > (size.x - 1)) return; //we're out of bounds	
+	//if(xy.y > (size.y - 1)) return; //we're out of bounds	
 
 	ABCDTriple abcd = computeABCD(g_depth, g_color, xy, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
 	updateABCD(xy, abcd);

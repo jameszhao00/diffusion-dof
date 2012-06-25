@@ -6,6 +6,8 @@ RWTexture2D<float4> g_output;
 cbuffer DDofCB
 {
 	float4 g_coc;
+	//x,y = image width/height
+	float4 g_ddofVals2;
 };
 void ddofUnpack(uint4 input, out float b, out float c, out float3 d)
 {

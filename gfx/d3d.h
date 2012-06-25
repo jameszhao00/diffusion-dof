@@ -28,6 +28,8 @@ namespace d3d
 		struct DDofCB
 		{
 			float4 params;
+			//x,y = image width/height
+			float4 params2;
 		};
 		struct BokehCB
 		{

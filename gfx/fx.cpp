@@ -695,7 +695,8 @@ namespace fx
 			gfx->immediate_ctx->VSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
-			dofCB.sync();
+			dofCB.data.params2.x = gpuEnvironment->vp_w;
+			dofCB.data.params2.y = gpuEnvironment->vp_h;
 			int numPasses = (int)glm::floor(glm::log2((float)gpuEnvironment->vp_w+1.f));
 			gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 			gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
@@ -704,6 +705,7 @@ namespace fx
 				for(int passIdx = 0; passIdx < numPasses; passIdx++)
 				{
 					//cout << "executing ddof CR H pass idx = " << passIdx << " "; 
+					
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();
 

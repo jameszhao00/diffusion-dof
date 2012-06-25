@@ -7,6 +7,8 @@ RWTexture2D<uint4> g_bcd;
 cbuffer DDofCB
 {
 	float4 g_ddofVals;
+	//x,y = image width/height
+	float4 g_ddofVals2;
 };
 cbuffer FSQuadCB : register(b1)
 {	

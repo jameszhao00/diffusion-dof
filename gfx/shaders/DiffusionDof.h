@@ -85,19 +85,48 @@ ABCDTriple computeABCD(Texture2D<float> depthTex, Texture2D<float3> colorTex, in
 				  float2 projConstants, float focalPlane, int iterations)
 {
 	ABCDTriple abcd;
-	//TODO: do boundary testing
-	float betaA = betaForward(depthTex, size, xy - 2 * xyDelta, xyDelta, projConstants, focalPlane, iterations);
-	//n-1 <-> n
-	float betaB = betaForward(depthTex, size, xy - xyDelta, xyDelta, projConstants, focalPlane, iterations);
-	//n <-> n+1
-	float betaC = betaForward(depthTex, size, xy, xyDelta, projConstants, focalPlane, iterations);
-	//n+1 <-> n+2
-	float betaD = betaForward(depthTex, size, xy + xyDelta, xyDelta, projConstants, focalPlane, iterations);
+
+	float betaPrev = beta(z2coc(unproject_z(depthTex[xy - 2 * xyDelta], projConstants), 100, .5, focalPlane), iterations);
+	float betaCur = beta(z2coc(unproject_z(depthTex[xy - xyDelta], projConstants), 100, .5, focalPlane), iterations);
+	float betaNext = 0;
+	float prevC = -min(betaPrev, betaCur);
+
+	for(int i = -1; i < 2; i++)
+	{		
+		betaNext = beta(z2coc(unproject_z(depthTex[xy + (i + 1) * xyDelta], projConstants), 100, .5, focalPlane), iterations);
+		float betaForward = min(betaCur, betaNext);
+
+		int idx = i+1;
+		
+		abcd.a[idx] = prevC;
+		abcd.b[idx] = 1 - prevC + betaForward;
+		float c = -betaForward;
+		abcd.c[idx] = c;
+		abcd.d[idx] = colorTex[xy + i * xyDelta];
+		prevC = c;
+		betaPrev = betaCur;
+		betaCur = betaNext;		
+	}
+	return abcd;
+}
+
+ABCDEntry computeABCDEntry(Texture2D<float> depthTex, 
+							Texture2D<float3> colorTex, int2 xy, int2 xyDelta, int2 size,				  
+				  float2 projConstants, float focalPlane, int iterations)
+{
+	ABCDEntry abcd;
+
+	float betaPrev = beta(z2coc(unproject_z(depthTex[xy - xyDelta], projConstants), 100, .5, focalPlane), iterations);
+	float betaCur = beta(z2coc(unproject_z(depthTex[xy], projConstants), 100, .5, focalPlane), iterations);
+	float betaNext = beta(z2coc(unproject_z(depthTex[xy + xyDelta], projConstants), 100, .5, focalPlane), iterations);
 	
-	abcd.a = float3(-betaA, -betaB, -betaC);
-	abcd.b = float3(1 + betaA + betaB, 1 + betaB + betaC, 1 + betaC + betaD);
-	abcd.c = float3(-betaB, -betaC, -betaD);
-	abcd.d = float3x3(colorTex[xy - xyDelta], colorTex[xy], colorTex[xy + xyDelta]);
+	float betaBackward = min(betaPrev, betaCur);
+	float betaForward = min(betaCur, betaNext);
+
+	abcd.a = -betaBackward;
+	abcd.b = 1 + betaBackward + betaForward;
+	abcd.c = -betaForward;
+	abcd.d = colorTex[xy];
 
 	return abcd;
 }
