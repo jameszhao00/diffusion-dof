@@ -26,17 +26,15 @@ void updateABCD(int2 xy, ABCDTriple abcd)
 	//b will never be 0 unless it doesn't exist!
 
 	//m[] needs to be aware of boundaries
-	float m[] = {
-		abcd.b[0] == 0 ? 0 : (abcd.a[1] / abcd.b[0]),
-		abcd.b[2] == 0 ? 0 : (abcd.c[1] / abcd.b[2])
-	};
+	float m0 = abcd.b[0] == 0 ? 0 : -(abcd.a[1] / abcd.b[0]);
+	float m1 = abcd.b[2] == 0 ? 0 : -(abcd.c[1] / abcd.b[2]);
 
-	float a = -m[0] * abcd.a[0];
-	float b = abcd.b[1] - m[0] * abcd.c[0] - m[1] * abcd.a[2];
-	float c = -m[1] * abcd.c[2];
+	float a = m0 * abcd.a[0];
+	float b = abcd.b[1] + m0 * abcd.c[0] + m1 * abcd.a[2];
+	float c = m1 * abcd.c[2];
 	//todo: take care of endpoints!
 	//i think it does at the moment, but confirm
-	float3 d = abcd.d[1] - m[0] * abcd.d[0] - m[1] * abcd.d[2];
+	float3 d = abcd.d[1] + m0 * abcd.d[0] + m1 * abcd.d[2];
 	g_abcdOut[xy] = ddofPack(a, b, c, d);
 }
 [numthreads(16, 16, 1)]
