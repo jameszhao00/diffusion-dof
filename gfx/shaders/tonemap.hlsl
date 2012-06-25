@@ -32,6 +32,6 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 	float3 tonemapped = linear_color / (1 + linear_color);
 	
 	//HACK: debug
-	return g_debugIn[position.y * size.x + position.x].color.xyzz;
+	//return g_debugIn[position.y * size.x + position.x].color.xyzz;
 	return float4(tonemapped, 1);
 }
