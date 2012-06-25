@@ -195,6 +195,7 @@ namespace fx
 		CComPtr<ComputeShader> pass1HP0;
 		CComPtr<ComputeShader> pass2H;
 		CComPtr<ComputeShader> pass2HLastPass;
+		CComPtr<ComputeShader> pass2HFirstPass;
 		bool gaussianBlur;
 
 		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
@@ -219,6 +220,10 @@ namespace fx
 				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HPassLast", "cs_5_0");			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HLastPass);
 			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HFirstPass);
+			}
 			TwBar *bar = TwNewBar("Diffusion Dof CR");
 			dofCB.data.params.x = 5;
 			dofCB.data.params.y = 1;
@@ -226,6 +231,8 @@ namespace fx
 				&dofCB.data.params.x, "min=0.01 max=100 step=0.01");
 			TwAddVarRW(bar, "Iterations", TW_TYPE_FLOAT, 
 				&dofCB.data.params.y, "min=1 max=18 step=1");
+			TwAddVarRW(bar, "Debug Pass Idx", TW_TYPE_FLOAT, 
+				&dofCB.data.params.w, "min=-1 max=10 step=1");
 		}
 		void execute(Gfx* gfx, 
 			Resource* inputColor, 

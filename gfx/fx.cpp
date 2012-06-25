@@ -696,7 +696,6 @@ namespace fx
 			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
 			dofCB.sync();
-			
 			int numPasses = (int)glm::floor(glm::log2((float)gpuEnvironment->vp_w+1.f));
 			gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 			gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
@@ -735,29 +734,40 @@ namespace fx
 					}	
 				} 
 				
-				for(int passIdx = numPasses - 1; passIdx > -1; passIdx--)
+				for(int passIdx = numPasses - 1; passIdx > -2; passIdx--)
 				{
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();
-
-					if(passIdx == numPasses - 1)
+					
+					if(passIdx == -1)
+					{
+						gfx->immediate_ctx->CSSetShader(pass2HFirstPass, nullptr, 0);
+						//need color/depth
+						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, inputDepth, inputColor};		
+						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+					}
+					else if(passIdx == numPasses - 1) 
 					{
 						gfx->immediate_ctx->CSSetShader(pass2HLastPass, nullptr, 0);
-						Resource* resources[] = {scratchABCDs[(passIdx) % 2]->srv, scratchABCDs[(passIdx + 1) % 2]->srv, nullptr};		
+						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, nullptr, nullptr};		
 						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
 					}
 					else
-					{						
+					{
 						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
 						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, nullptr, nullptr};		
 						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
 					}
 
+					
+
 					UAVResource* uavs[] = {outputDof->uav, nullptr, nullptr};
 					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
-					
+					//number of items at current pass - number of items @ current pass + 1
+
 					float2 numThreads(
-						glm::floor((gpuEnvironment->vp_w + 1.f) / pow(2.f, passIdx + 1)),
+						glm::floor((gpuEnvironment->vp_w) / pow(2.f, passIdx + 1)) 
+						- glm::floor((gpuEnvironment->vp_w) / pow(2.f, passIdx + 2)) ,
 						gpuEnvironment->vp_h
 						);
 					//cout << "thread count = " << numThreads[0] << ", " << numThreads[1] << endl;

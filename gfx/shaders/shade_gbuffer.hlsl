@@ -93,7 +93,5 @@ float4 ps( VS2PS IN ) : SV_TARGET
 		
 	}
 	color /= MSAA_COUNT;
-	//HACK:
-	return color.xxxx;
 	return color.xyzz;
 }
