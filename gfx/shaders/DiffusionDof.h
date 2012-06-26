@@ -1,5 +1,23 @@
 #include "shader.h"
 
+//use odd entries
+cbuffer DDofCB
+{
+	//x = focal plane
+	//y = # iterations
+	//z = passidx
+	float4 g_ddofVals;
+	//x,y = image width/height
+	float4 g_ddofVals2;
+};
+cbuffer FSQuadCB : register(b1)
+{	
+	float4x4 g_inv_p;
+	float4 g_proj_constants;
+	float4 g_debug_vars;
+	float4x4 g_proj;
+};
+
 /* depth of field stuff */
 float beta(float coc, int iterations)
 {
@@ -11,6 +29,16 @@ float z2coc(float sampleZ, float aperture, float focalLength, float focalPlane)
 	return abs(aperture * (focalLength * (sampleZ - focalPlane)) /
 		(sampleZ * (focalPlane - focalLength)));
 
+}
+//get beta, and return 0 if xy.x is out of bounds
+float betaX(Texture2D<float> depthTex, int2 xy, int2 size)
+{	
+	float focalPlane = g_ddofVals.x;
+	float iterations = g_ddofVals.y;
+	float2 projConstants = g_proj_constants.xy;
+
+	return ((xy.x > -1) && (xy.x < size.x)) * 
+		beta(z2coc(unproject_z(depthTex[xy], projConstants), 100, .5, focalPlane), iterations);
 }
 struct ABCDEntry
 {
@@ -83,31 +111,19 @@ ABCDTriple readABCD(Texture2D<uint4> abcdTex, int2 xy, int2 xyDelta)
 	
 	return abcd;
 }
-
-float betaForward(Texture2D<float> depthTex, int2 size, int2 xy, int2 forwardXyDelta, 
-				  float2 projConstants, float focalPlane, int iterations)
-{
-	int2 xyNext = xy + forwardXyDelta;
-	if((xyNext.x > size.x - 1) || (xyNext.y > size.y - 1)) return 0;
-	float cocNext = z2coc(unproject_z(depthTex[xyNext], projConstants), 100, .5, focalPlane);
-	float cocCurrent = z2coc(unproject_z(depthTex[xy], projConstants), 100, .5, focalPlane);
-	float betaNext = beta(cocNext, iterations);
-	float betaCurrent = beta(cocCurrent, iterations);
-	return min(betaNext, betaCurrent);
-}
 ABCDTriple computeABCD(Texture2D<float> depthTex, Texture2D<float3> colorTex, int2 xy, int2 xyDelta, int2 size,				  
 				  float2 projConstants, float focalPlane, int iterations)
 {
 	ABCDTriple abcd;
 
-	float betaPrev = beta(z2coc(unproject_z(depthTex[xy - 2 * xyDelta], projConstants), 100, .5, focalPlane), iterations);
-	float betaCur = beta(z2coc(unproject_z(depthTex[xy - xyDelta], projConstants), 100, .5, focalPlane), iterations);
+	float betaPrev = betaX(depthTex, xy - 2 * xyDelta, size);
+	float betaCur = betaX(depthTex, xy - xyDelta, size);
 	float betaNext = 0;
 	float prevC = -min(betaPrev, betaCur);
 
 	for(int i = -1; i < 2; i++)
 	{		
-		betaNext = beta(z2coc(unproject_z(depthTex[xy + (i + 1) * xyDelta], projConstants), 100, .5, focalPlane), iterations);
+		betaNext = betaX(depthTex, xy + (i + 1) * xyDelta, size);
 		float betaForward = min(betaCur, betaNext);
 
 		int idx = i+1;
@@ -130,9 +146,9 @@ ABCDEntry computeABCDEntry(Texture2D<float> depthTex,
 {
 	ABCDEntry abcd;
 
-	float betaPrev = beta(z2coc(unproject_z(depthTex[xy - xyDelta], projConstants), 100, .5, focalPlane), iterations);
-	float betaCur = beta(z2coc(unproject_z(depthTex[xy], projConstants), 100, .5, focalPlane), iterations);
-	float betaNext = beta(z2coc(unproject_z(depthTex[xy + xyDelta], projConstants), 100, .5, focalPlane), iterations);
+	float betaPrev = betaX(depthTex, xy - xyDelta, size);
+	float betaCur = betaX(depthTex, xy, size);
+	float betaNext = betaX(depthTex, xy + xyDelta, size);
 	
 	float betaBackward = min(betaPrev, betaCur);
 	float betaForward = min(betaCur, betaNext);

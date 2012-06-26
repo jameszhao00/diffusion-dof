@@ -11,22 +11,6 @@ struct DDofOutput
 };
 RWStructuredBuffer<DDofOutput> g_output : register(u0);
 
-cbuffer DDofCB
-{
-	//x = focal plane
-	//z = passidx
-	//w = debug pass idx
-	float4 g_ddofVals;
-	//x,y = image width/height
-	float4 g_ddofVals2;
-};
-cbuffer FSQuadCB : register(b1)
-{	
-	float4x4 g_inv_p;
-	float4 g_proj_constants;
-	float4 g_debug_vars;
-	float4x4 g_proj;
-};
 [numthreads(16, 16, 1)]
 void csPass2HPassLast(uint3 DTid : SV_DispatchThreadID)
 {
@@ -79,26 +63,7 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 	int passIdx = g_ddofVals.z;
 
 	float2 size = g_ddofVals2.xy;	
-	
-	//the current to be solved entry is next pass idx's entry shifted up deltaXY at this passIdx
-	/*
-	int2 xyB = int2(2 * DTid.x, DTid.y); //(2 * i + 1) - (1)
-		
-	int2 xyA = xyB - int2(1, 0);
-	int2 xyC = xyB + int2(1, 0);
-	
-	ABCDEntry abcd = computeABCDEntry(g_depth, g_color, xyB, int2(1, 0), size, 
-		g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
-	
-	float3 yA = g_output[xyA.y * size.x + xyA.x].color;
-	float3 yC = g_output[xyC.y * size.x + xyC.x].color;
-	
-	//ay[n-1] + by[n] + cy[n+1] = d[n]
-	//-> y[n] = (d[n] - cy[n+1] - ay[n-1]) / b
 
-	float3 yB = (abcd.d - abcd.c * yC - abcd.a * yA) / abcd.b;
-	g_output[xyB.y * size.x + xyB.x].color = yB;
-	*/
 	int2 xyB = int2(coordNOffset(DTid.x, 1), DTid.y) 
 		- calcXYDelta(int2(1, 0), 0);
 
@@ -116,7 +81,11 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 		- abcdBPass0.a * yAPass0
 		- abcdBPass0.c * yCPass0) / 
 		abcdBPass0.b;
-	g_output[xyB.y * size.x + xyB.x].color = yB;
+	//this line generates errors!
+	{
+		int outOfBoundsModifier = (xyB.x > size.x - 1) * 10000000;
+		g_output[xyB.y * size.x + xyB.x + outOfBoundsModifier].color = yB;
+	}
 
 	//fill in stuff for pass = -1
 	int2 xyAPassNeg1 = xyAPass0 + int2(1, 0);
@@ -124,8 +93,14 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 	
 	//for pass = -1
 	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b
-	g_output[xyAPassNeg1.y * size.x + xyAPassNeg1.x].color = 
-		(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0];
-	g_output[xyCPassNeg1.y * size.x + xyCPassNeg1.x].color = 
-		(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2];
+	{
+		int outOfBoundsModifier = (xyAPassNeg1.x > size.x - 1) * 10000000;
+		g_output[xyAPassNeg1.y * size.x + xyAPassNeg1.x + outOfBoundsModifier].color = 
+			(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0];
+	}
+	{
+		int outOfBoundsModifier = (xyAPassNeg1.x > size.x - 1) * 10000000;
+		g_output[xyCPassNeg1.y * size.x + xyCPassNeg1.x + outOfBoundsModifier].color = 
+			(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2];
+	}
 }

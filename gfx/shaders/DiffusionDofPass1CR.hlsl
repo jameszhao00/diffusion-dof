@@ -4,23 +4,6 @@ Texture2D<float3> g_color : register(t1);
 
 Texture2D<uint4> g_abcdIn : register(t2);
 RWTexture2D<uint4> g_abcdOut : register(u0);
-//use odd entries
-cbuffer DDofCB
-{
-	//x = focal plane
-	//y = # iterations
-	//z = passidx
-	float4 g_ddofVals;
-	//x,y = image width/height
-	float4 g_ddofVals2;
-};
-cbuffer FSQuadCB : register(b1)
-{	
-	float4x4 g_inv_p;
-	float4 g_proj_constants;
-	float4 g_debug_vars;
-	float4x4 g_proj;
-};
 void updateABCD(int2 xy, ABCDTriple abcd)
 {
 	//b will never be 0 unless it doesn't exist!
@@ -62,8 +45,8 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	float2 projConstants = g_proj_constants.xy;
 	float focalPlane = g_ddofVals.x;
 	float iterations = g_ddofVals.y;
-	float betaPrev = beta(z2coc(unproject_z(g_depth[xy - int2(3, 0) - int2(1, 0)], projConstants), 100, .5, focalPlane), iterations);
-	float betaCur = beta(z2coc(unproject_z(g_depth[xy - int2(3, 0)], projConstants), 100, .5, focalPlane), iterations);
+	float betaPrev = betaX(g_depth, xy - int2(3, 0) - int2(1, 0), size);
+	float betaCur = betaX(g_depth, xy - int2(3, 0), size);
 	float betaNext = 0;
 	float prevC = -min(betaPrev, betaCur);
 	ABCDTriple abcd;
@@ -71,7 +54,7 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	[unroll]
 	for(int i = -3; i < 0; i++)
 	{		
-		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
 		float betaForward = min(betaCur, betaNext);
 
 		int idx = i+3;
@@ -93,7 +76,7 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	[unroll]
 	for(int i = 0; i < 2; i++)
 	{		
-		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
 		float betaForward = min(betaCur, betaNext);
 
 		//map i=0 to x[1] (we've already computed x[0])
@@ -116,7 +99,7 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	[unroll]
 	for(int i = 2; i < 4; i++)
 	{		
-		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
 		float betaForward = min(betaCur, betaNext);
 
 		//map i=2 to x[1] (we've already computed x[0])
@@ -133,16 +116,6 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	}
 	ABCDEntry abcdC = reduce(abcd);
 
-	/*
-	ABCDEntry abcdA = reduce(computeABCD(g_depth, g_color, xy - int2(2, 0), 
-		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
-	
-	ABCDEntry abcdB = reduce(computeABCD(g_depth, g_color, xy, 
-		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
-	
-	ABCDEntry abcdC = reduce(computeABCD(g_depth, g_color, xy + int2(2, 0), 
-		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
-	*/
 	ABCDTriple abcd3;
 	abcd3.a = float3(abcdA.a, abcdB.a, abcdC.a);
 	abcd3.b = float3(abcdA.b, abcdB.b, abcdC.b);

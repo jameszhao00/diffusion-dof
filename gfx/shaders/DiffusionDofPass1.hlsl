@@ -4,19 +4,6 @@ Texture2D<float> g_depth;
 Texture2D<float3> g_color;
 
 RWTexture2D<uint4> g_bcd;
-cbuffer DDofCB
-{
-	float4 g_ddofVals;
-	//x,y = image width/height
-	float4 g_ddofVals2;
-};
-cbuffer FSQuadCB : register(b1)
-{	
-	float4x4 g_inv_p;
-	float4 g_proj_constants;
-	float4 g_debug_vars;
-	float4x4 g_proj;
-};
 uint4 ddofPack(float b, float c, float3 d)
 {
 	return uint4(
@@ -83,17 +70,6 @@ float betaBackward(Texture2D<float> depth, int2 size, int2 xy, int2 forwardXyDel
 	float betaCurrent = beta(cocCurrent, int(g_ddofVals.y));
 	return min(betaPrevious, betaCurrent);
 }
-float betaForward(Texture2D<float> depth, int2 size, int2 xy, int2 forwardXyDelta)
-{
-	int2 xyNext = xy + forwardXyDelta;
-	if((xyNext.x > size.x - 1) || (xyNext.y > size.y - 1)) return 0;
-	float cocNext = z2coc(unproject_z(g_depth[xyNext], g_proj_constants), 100, .5, g_ddofVals.x);
-	float cocCurrent = z2coc(unproject_z(g_depth[xy], g_proj_constants), 100, .5, g_ddofVals.x);
-	float betaNext = beta(cocNext, int(g_ddofVals.y));
-	float betaCurrent = beta(cocCurrent, int(g_ddofVals.y));
-	return min(betaNext, betaCurrent);
-}
-
 [numthreads(32, 1, 1)]
 void csPass1H( uint3 DTid : SV_DispatchThreadID )
 {
