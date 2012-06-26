@@ -27,6 +27,6 @@ float4 ps( float4 position : SV_POSITION) : SV_Target
 	g_source.GetDimensions(size.x, size.y);	
 	//return d.xyzz;
 	float3 color = g_debugIn[floor(position.y) * size.x + floor(position.x)].color.xyz;
-	return float4(color, 1);
+	return float4(color / (1+color), 1);
 
 }

@@ -745,12 +745,23 @@ namespace fx
 				{
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();
-					
-					Resource* resources[3] = {nullptr, nullptr, nullptr};	
+
+					if(passIdx == 0)
+					{
+						UAVResource* uavs[] = {outputDof->uav, nullptr, nullptr};
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+					}
+					else
+					{
+						UAVResource* uavs[] = {hYs[passIdx].uav, nullptr, nullptr};
+						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+					}
+					Resource* resources[4] = {nullptr, nullptr, nullptr, nullptr};	
 					if(passIdx == 0)
 					{
 						resources[1] = inputDepth;
 						resources[2] = inputColor;
+						resources[3] = hYs[1].srv;
 						gfx->immediate_ctx->CSSetShader(pass2HFirstPass, nullptr, 0);
 					}
 					else if(passIdx == passesCount - 1) 
@@ -761,13 +772,11 @@ namespace fx
 					else
 					{
 						resources[0] = hABCDs[passIdx].srv;
+						resources[3] = hYs[passIdx + 1].srv;
 						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);	
 					}					
-					gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);
+					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
 					
-
-					UAVResource* uavs[] = {outputDof->uav, nullptr, nullptr};
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
 					//number of items at current pass - number of items @ current pass + 1
 
 					float2 numThreads(

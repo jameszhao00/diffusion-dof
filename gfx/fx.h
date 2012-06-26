@@ -197,6 +197,7 @@ namespace fx
 		CComPtr<ComputeShader> pass2HLastPass;
 		CComPtr<ComputeShader> pass2HFirstPass;
 		vector<Texture2D> hABCDs;
+		vector<Texture2D> hYs;
 
 		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
 		{
@@ -245,16 +246,27 @@ namespace fx
 		{
 			//TODO: make sure clear() deallocs. all the textures!
 			hABCDs.clear();
+			hYs.clear();
 			//where d is dimension
 			//ceil(log2(d)) passes required
 
 			//create the h chains
+			//TODO: we don't need some textures (e.g. pass1's texture 0, stuff not needed once we have reduce4/merge4)
 			for(int i = 0; i < numPasses(size.x); i++)
-			{				
-				Texture2D tex2D;
-				tex2D.configure("ddof solver tex h " + i, DXGI_FORMAT_R32G32B32A32_UINT);
-				tex2D.initialize(*d3d, entriesAtPass(size.x, i), size.y, true);				
-				hABCDs.push_back(tex2D);
+			{			
+				cout << "p " << i << " size x = " << entriesAtPass(size.x, i) << endl;
+				{
+					Texture2D tex2D;
+					tex2D.configure("ddof h pass0 " + i, DXGI_FORMAT_R32G32B32A32_UINT);
+					tex2D.initialize(*d3d, entriesAtPass(size.x, i), size.y, true);				
+					hABCDs.push_back(tex2D);
+				}
+				{
+					Texture2D tex2D;
+					tex2D.configure("ddof h pass1 " + i, DXGI_FORMAT_R16G16B16A16_FLOAT);
+					tex2D.initialize(*d3d, entriesAtPass(size.x, i), size.y, true);				
+					hYs.push_back(tex2D);
+				}
 			}
 			//TODO: create the v chains
 		}

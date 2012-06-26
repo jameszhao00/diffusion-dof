@@ -120,7 +120,7 @@ ABCDTriple computeABCD(Texture2D<float> depthTex, Texture2D<float3> colorTex, in
 	float betaCur = betaX(depthTex, xy - xyDelta, size);
 	float betaNext = 0;
 	float prevC = -min(betaPrev, betaCur);
-
+	[unroll]
 	for(int i = -1; i < 2; i++)
 	{		
 		betaNext = betaX(depthTex, xy + (i + 1) * xyDelta, size);

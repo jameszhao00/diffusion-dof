@@ -121,13 +121,14 @@ void Renderer::postFxPass()
 	//	&gbuffer.scratchABC, &gbuffer.scratch[2]);
 
 	diffusionDofCR.execute(d3d, gbuffer.scratch[0].srv, d3d->depth_srv, 
-		&gbuffer.scratchABCD[0], &gbuffer.scratchABCD[1], &gbuffer.ddofOutputStructureBuffer);
+		&gbuffer.scratchABCD[0], &gbuffer.scratchABCD[1], &gbuffer.scratch[2]);
+
 	gpuEnv.gfx_profiler.end_block();
-	visualizeStructuredBuffer.execute(d3d, &gbuffer.ddofOutputStructureBuffer, gbuffer.scratch[0].srv,
-		d3d->back_buffer_rtv);
+	//visualizeStructuredBuffer.execute(d3d, &gbuffer.scratch[1], gbuffer.scratch[0].srv,
+	//	d3d->back_buffer_rtv);
 	gpuEnv.gfx_profiler.begin_block(L"tonemap");
 	//pointSpriteBokehDof.execute(d3d, gbuffer.scratch[0].srv, d3d->depth_srv, gbuffer.scratch[1].rtv);
-	//fx::tonemap(d3d, &gpuEnv, &tonemap_ctx, gbuffer.scratch[2].srv, d3d->back_buffer_rtv);
+	fx::tonemap(d3d, &gpuEnv, &tonemap_ctx, gbuffer.scratch[2].srv, d3d->back_buffer_rtv);
 	gpuEnv.gfx_profiler.end_block();
 }
 

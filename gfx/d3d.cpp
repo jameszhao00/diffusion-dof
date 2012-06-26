@@ -161,7 +161,7 @@ void D3D::set_viewport(SIZE size)
 }
 void D3D::swap_buffers()
 {
-	TwDraw();
+	//TwDraw();
 	swap_chain->Present(0, 0);	
 }
 
