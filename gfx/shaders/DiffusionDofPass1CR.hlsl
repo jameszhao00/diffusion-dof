@@ -56,13 +56,84 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;
 
-	//int2 xy = int2(2 * DTid.x + 1, DTid.y);
-
-	//ABCDTriple abcd = computeABCD(g_depth, g_color, xy, 
-	//		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
-	//updateABCD(DTid.xy, abcd);
-	
 	int2 xy = int2(4 * DTid.x + 3, DTid.y);
+
+	//compute abcd for x - 3, to x + 3
+	float2 projConstants = g_proj_constants.xy;
+	float focalPlane = g_ddofVals.x;
+	float iterations = g_ddofVals.y;
+	float betaPrev = beta(z2coc(unproject_z(g_depth[xy - int2(3, 0) - int2(1, 0)], projConstants), 100, .5, focalPlane), iterations);
+	float betaCur = beta(z2coc(unproject_z(g_depth[xy - int2(3, 0)], projConstants), 100, .5, focalPlane), iterations);
+	float betaNext = 0;
+	float prevC = -min(betaPrev, betaCur);
+	ABCDTriple abcd;
+	int2 xyDelta = int2(1, 0);
+	[unroll]
+	for(int i = -3; i < 0; i++)
+	{		
+		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		float betaForward = min(betaCur, betaNext);
+
+		int idx = i+3;
+		
+		abcd.a[idx] = prevC;
+		abcd.b[idx] = 1 - prevC + betaForward;
+		float c = -betaForward;
+		abcd.c[idx] = c;
+		abcd.d[idx] = g_color[xy + i * xyDelta];
+		prevC = c;
+		betaPrev = betaCur;
+		betaCur = betaNext;		
+	}
+	ABCDEntry abcdA = reduce(abcd);
+	abcd.a[0] = abcd.a[2];
+	abcd.b[0] = abcd.b[2];
+	abcd.c[0] = abcd.c[2];
+	abcd.d[0] = abcd.d[2];
+	[unroll]
+	for(int i = 0; i < 2; i++)
+	{		
+		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		float betaForward = min(betaCur, betaNext);
+
+		//map i=0 to x[1] (we've already computed x[0])
+		int idx = i+1;
+		
+		abcd.a[idx] = prevC;
+		abcd.b[idx] = 1 - prevC + betaForward;
+		float c = -betaForward;
+		abcd.c[idx] = c;
+		abcd.d[idx] = g_color[xy + i * xyDelta];
+		prevC = c;
+		betaPrev = betaCur;
+		betaCur = betaNext;		
+	}
+	ABCDEntry abcdB = reduce(abcd);	
+	abcd.a[0] = abcd.a[2];
+	abcd.b[0] = abcd.b[2];
+	abcd.c[0] = abcd.c[2];
+	abcd.d[0] = abcd.d[2];
+	[unroll]
+	for(int i = 2; i < 4; i++)
+	{		
+		betaNext = beta(z2coc(unproject_z(g_depth[xy + int2(i + 1, 0)], projConstants), 100, .5, focalPlane), iterations);
+		float betaForward = min(betaCur, betaNext);
+
+		//map i=2 to x[1] (we've already computed x[0])
+		int idx = i - 1;
+		
+		abcd.a[idx] = prevC;
+		abcd.b[idx] = 1 - prevC + betaForward;
+		float c = -betaForward;
+		abcd.c[idx] = c;
+		abcd.d[idx] = g_color[xy + i * xyDelta];
+		prevC = c;
+		betaPrev = betaCur;
+		betaCur = betaNext;		
+	}
+	ABCDEntry abcdC = reduce(abcd);
+
+	/*
 	ABCDEntry abcdA = reduce(computeABCD(g_depth, g_color, xy - int2(2, 0), 
 		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
 	
@@ -71,7 +142,7 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	
 	ABCDEntry abcdC = reduce(computeABCD(g_depth, g_color, xy + int2(2, 0), 
 		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
-
+	*/
 	ABCDTriple abcd3;
 	abcd3.a = float3(abcdA.a, abcdB.a, abcdC.a);
 	abcd3.b = float3(abcdA.b, abcdB.b, abcdC.b);
