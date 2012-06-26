@@ -1,5 +1,5 @@
 
-#include "shader.h"
+#include "diffusiondof.h"
 Texture2D<float> g_depth;
 Texture2D<float3> g_color;
 

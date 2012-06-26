@@ -37,33 +37,46 @@ void updateABCD(int2 xy, ABCDTriple abcd)
 	float3 d = abcd.d[1] + m0 * abcd.d[0] + m1 * abcd.d[2];
 	g_abcdOut[xy] = ddofPack(a, b, c, d);
 }
-[numthreads(16, 16, 1)]
+#define H_GROUPSIZE 16
+#define V_GROUPSIZE 16
+[numthreads(H_GROUPSIZE, V_GROUPSIZE, 1)]
 void csPass1H(uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
-	float2 size = g_ddofVals2.xy;
-	//g_depth.GetDimensions(size.x, size.y);
-	int i = DTid.x;
+	float2 size = g_ddofVals2.xy;	
+	int2 xy = int2(2 * DTid.x + 1, DTid.y);
 
-	int2 xy = int2(coordNOffset(DTid.x, passIdx), DTid.y);
-	//if(xy.x > (size.x - 1)) return; //we're out of bounds	
-	//if(xy.y > (size.y - 1)) return; //we're out of bounds	
-	//calcXYDelta - we're looking for spacing at passIdx - 1
-	ABCDTriple abcd = readABCD(g_abcdIn, xy, calcXYDelta(int2(1, 0), passIdx - 1));
-	updateABCD(xy, abcd);
+	ABCDTriple abcd = readABCD(g_abcdIn, xy, int2(1, 0));
+	updateABCD(DTid.xy, abcd);
 }
-[numthreads(16, 16, 1)]
-void csPass1HPass0(uint3 DTid : SV_DispatchThreadID)
+
+[numthreads(H_GROUPSIZE, V_GROUPSIZE, 1)]
+void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;
-	//g_depth.GetDimensions(size.x, size.y);
-	int i = DTid.x;
 
-	int2 xy = int2(coordNOffset(DTid.x, 0), DTid.y);
-	//if(xy.x > (size.x - 1)) return; //we're out of bounds	
-	//if(xy.y > (size.y - 1)) return; //we're out of bounds	
+	//int2 xy = int2(2 * DTid.x + 1, DTid.y);
 
-	ABCDTriple abcd = computeABCD(g_depth, g_color, xy, int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
-	updateABCD(xy, abcd);
+	//ABCDTriple abcd = computeABCD(g_depth, g_color, xy, 
+	//		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
+	//updateABCD(DTid.xy, abcd);
+	
+	int2 xy = int2(4 * DTid.x + 3, DTid.y);
+	ABCDEntry abcdA = reduce(computeABCD(g_depth, g_color, xy - int2(2, 0), 
+		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
+	
+	ABCDEntry abcdB = reduce(computeABCD(g_depth, g_color, xy, 
+		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
+	
+	ABCDEntry abcdC = reduce(computeABCD(g_depth, g_color, xy + int2(2, 0), 
+		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y));
+
+	ABCDTriple abcd3;
+	abcd3.a = float3(abcdA.a, abcdB.a, abcdC.a);
+	abcd3.b = float3(abcdA.b, abcdB.b, abcdC.b);
+	abcd3.c = float3(abcdA.c, abcdB.c, abcdC.c);
+	abcd3.d = float3x3(abcdA.d, abcdB.d, abcdC.d);
+
+	updateABCD(DTid.xy, abcd3);
 }

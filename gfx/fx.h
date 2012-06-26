@@ -196,11 +196,10 @@ namespace fx
 		CComPtr<ComputeShader> pass2H;
 		CComPtr<ComputeShader> pass2HLastPass;
 		CComPtr<ComputeShader> pass2HFirstPass;
-		bool gaussianBlur;
+		vector<Texture2D> hABCDs;
 
 		void initialize(Gfx* gfx, GpuEnvironment* gpuEnvironment, FXEnvironment* fxEnvironment)
 		{
-			gaussianBlur = false;
 			dofCB.initialize(*gfx);
 			this->gpuEnvironment = gpuEnvironment;
 			this->fxEnvironment = fxEnvironment;
@@ -233,6 +232,31 @@ namespace fx
 				&dofCB.data.params.y, "min=1 max=18 step=1");
 			TwAddVarRW(bar, "Debug Pass Idx", TW_TYPE_FLOAT, 
 				&dofCB.data.params.w, "min=-1 max=10 step=1");
+		}
+		int numPasses(int dimension)
+		{
+			return glm::floor(log2((float)dimension));
+		}
+		int entriesAtPass(int dimension, int passIdx)
+		{
+			return glm::floor((float)dimension / pow(2.f, passIdx + 1));
+		}
+		void reset(D3D* d3d, int2 size)
+		{
+			//TODO: make sure clear() deallocs. all the textures!
+			hABCDs.clear();
+			//where d is dimension
+			//ceil(log2(d)) passes required
+
+			//create the h chains
+			for(int i = 0; i < numPasses(size.x); i++)
+			{				
+				Texture2D tex2D;
+				tex2D.configure("ddof solver tex h " + i, DXGI_FORMAT_R32G32B32A32_UINT);
+				tex2D.initialize(*d3d, entriesAtPass(size.x, i), size.y, true);				
+				hABCDs.push_back(tex2D);
+			}
+			//TODO: create the v chains
 		}
 		void execute(Gfx* gfx, 
 			Resource* inputColor, 

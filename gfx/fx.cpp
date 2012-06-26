@@ -695,72 +695,75 @@ namespace fx
 			gfx->immediate_ctx->VSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->PSSetShader(nullptr, nullptr, 0);
 			gfx->immediate_ctx->GSSetShader(nullptr, nullptr, 0);
+
 			dofCB.data.params2.x = gpuEnvironment->vp_w;
 			dofCB.data.params2.y = gpuEnvironment->vp_h;
-			int numPasses = (int)glm::floor(glm::log2((float)gpuEnvironment->vp_w+1.f));
+
+			int passesCount = numPasses(gpuEnvironment->vp_w);
 			gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 			gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
 			Texture2D* scratchABCDs[] = {scratchABCD1, scratchABCD2};
 			{
-				for(int passIdx = 0; passIdx < numPasses; passIdx++)
+				//pass 0 and 1 collapsed into pass 1
+				for(int passIdx = 1; passIdx < passesCount; passIdx++)
 				{
-					//cout << "executing ddof CR H pass idx = " << passIdx << " "; 
-					
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();
-
-					if(passIdx == 0) gfx->immediate_ctx->CSSetShader(pass1HP0, nullptr, 0);
-					else gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
-
-					Resource* resources[] = {inputDepth, inputColor, scratchABCDs[passIdx % 2]->srv};		
-					gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);		
-
-					UAVResource* uavs[] = {scratchABCDs[(passIdx + 1) % 2]->uav};
+					//TODO: don't create hABCDs[0]
+					UAVResource* uavs[1] = {hABCDs[passIdx].uav};
 					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
-
-					float2 numThreads(
-						glm::floor((gpuEnvironment->vp_w + 1.f) / pow(2.f, passIdx + 1)),
-						gpuEnvironment->vp_h
-						);
-					//cout << "thread count = " << numThreads[0] << ", " << numThreads[1] << endl;
-					float2 numGroups(glm::ceil(numThreads / float2(16)));
-					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
-					
-					//cleanup
-					{
-						Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
-						UAVResource* uavs[] = {nullptr, nullptr, nullptr};
-						gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
-						gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
-						gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
-					}	
-				} 
-				
-				for(int passIdx = numPasses - 1; passIdx > -2; passIdx--)
-				{
-					dofCB.data.params.z = passIdx;
-					dofCB.sync();
-					
-					if(passIdx == -1)
-					{
-						gfx->immediate_ctx->CSSetShader(pass2HFirstPass, nullptr, 0);
-						//need color/depth
-						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, inputDepth, inputColor};		
+					if(passIdx == 1)
+					{		
+						Resource* resources[3] = {inputDepth, inputColor, nullptr};
 						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
-					}
-					else if(passIdx == numPasses - 1) 
-					{
-						gfx->immediate_ctx->CSSetShader(pass2HLastPass, nullptr, 0);
-						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, nullptr, nullptr};		
-						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+						gfx->immediate_ctx->CSSetShader(pass1HP0, nullptr, 0);
 					}
 					else
 					{
-						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);
-						Resource* resources[] = {scratchABCDs[(passIdx + 1) % 2]->srv, nullptr, nullptr};		
+						Resource* resources[3] = {nullptr, nullptr, hABCDs[passIdx-1].srv};
 						gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+						gfx->immediate_ctx->CSSetShader(pass1H, nullptr, 0);
 					}
 
+					float2 numThreads(entriesAtPass(gpuEnvironment->vp_w, passIdx), gpuEnvironment->vp_h);
+					float2 numGroups(glm::ceil(numThreads / float2(16, 16)));
+					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
+					
+					
+				}
+				//cleanup
+				if(1)
+				{
+					Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr, nullptr};
+					gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+				}	
+				//pass -1 and 0 collapsed into pass 0
+				for(int passIdx = passesCount - 1; passIdx > -1; passIdx--)
+				{
+					dofCB.data.params.z = passIdx;
+					dofCB.sync();
+					
+					Resource* resources[3] = {nullptr, nullptr, nullptr};	
+					if(passIdx == 0)
+					{
+						resources[1] = inputDepth;
+						resources[2] = inputColor;
+						gfx->immediate_ctx->CSSetShader(pass2HFirstPass, nullptr, 0);
+					}
+					else if(passIdx == passesCount - 1) 
+					{
+						resources[0] = hABCDs[passIdx].srv;
+						gfx->immediate_ctx->CSSetShader(pass2HLastPass, nullptr, 0);
+					}
+					else
+					{
+						resources[0] = hABCDs[passIdx].srv;
+						gfx->immediate_ctx->CSSetShader(pass2H, nullptr, 0);	
+					}					
+					gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);
 					
 
 					UAVResource* uavs[] = {outputDof->uav, nullptr, nullptr};
@@ -768,11 +771,9 @@ namespace fx
 					//number of items at current pass - number of items @ current pass + 1
 
 					float2 numThreads(
-						glm::floor((gpuEnvironment->vp_w) / pow(2.f, passIdx + 1)) 
-						- glm::floor((gpuEnvironment->vp_w) / pow(2.f, passIdx + 2)) ,
-						gpuEnvironment->vp_h
+						entriesAtPass(gpuEnvironment->vp_w, passIdx)
+						- entriesAtPass(gpuEnvironment->vp_w, passIdx + 1), gpuEnvironment->vp_h
 						);
-					//cout << "thread count = " << numThreads[0] << ", " << numThreads[1] << endl;
 					float2 numGroups(glm::ceil(numThreads / float2(16)));
 					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
 				}

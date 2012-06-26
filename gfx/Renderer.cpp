@@ -146,6 +146,8 @@ void Renderer::handleViewportResize( int2 viewportSize )
 		mainCamera.ar = ((float)viewportSize.x)/viewportSize.y;
 		cachedWindowSize = viewportSize;
 		gbuffer.resize(viewportSize.x, viewportSize.y);
+		
+		diffusionDofCR.reset(d3d, viewportSize);
 	}
 }
 

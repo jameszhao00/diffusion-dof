@@ -1,4 +1,17 @@
 #include "shader.h"
+
+/* depth of field stuff */
+float beta(float coc, int iterations)
+{
+	return coc * coc * (1.f/iterations);
+}
+float z2coc(float sampleZ, float aperture, float focalLength, float focalPlane)
+{
+	//from http://http.developer.nvidia.com/GPUGems/gpugems_ch23.html
+	return abs(aperture * (focalLength * (sampleZ - focalPlane)) /
+		(sampleZ * (focalPlane - focalLength)));
+
+}
 struct ABCDEntry
 {
 	float a;
@@ -43,6 +56,7 @@ int coordNOffset(int i, int passIdx)
 	int k = pow(2, passIdx+1);
 	return i * k + k - 2 + 1;
 }
+
 //works
 int2 calcXYDelta(int2 rawXyDelta, int passIdx)
 {
@@ -128,5 +142,20 @@ ABCDEntry computeABCDEntry(Texture2D<float> depthTex,
 	abcd.c = -betaForward;
 	abcd.d = colorTex[xy];
 
+	return abcd;
+}
+
+ABCDEntry reduce(ABCDTriple abcd3)
+{	
+	ABCDEntry abcd;
+	float m0 = abcd3.b[0] == 0 ? 0 : -(abcd3.a[1] / abcd3.b[0]);
+	float m1 = abcd3.b[2] == 0 ? 0 : -(abcd3.c[1] / abcd3.b[2]);
+
+	abcd.a = m0 * abcd3.a[0];
+	abcd.b = abcd3.b[1] + m0 * abcd3.c[0] + m1 * abcd3.a[2];
+	abcd.c = m1 * abcd3.c[2];
+	//todo: take care of endpoints!
+	//i think it does at the moment, but confirm
+	abcd.d = abcd3.d[1] + m0 * abcd3.d[0] + m1 * abcd3.d[2];
 	return abcd;
 }
