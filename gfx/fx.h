@@ -210,7 +210,7 @@ namespace fx
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1H);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1HPass0", "cs_5_0", true);			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1HPass0", "cs_5_0");			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1HP0);
 			}
 			{

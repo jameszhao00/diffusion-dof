@@ -727,7 +727,7 @@ namespace fx
 					}
 
 					float2 numThreads(entriesAtPass(gpuEnvironment->vp_w, passIdx), gpuEnvironment->vp_h);
-					float2 numGroups(glm::ceil(numThreads / float2(passIdx == 1 ? 8 : 16, passIdx == 1 ? 8 : 16)));
+					float2 numGroups(glm::ceil(numThreads / float2(passIdx == 1 ? 64 - 2 : 16, passIdx == 1 ? 1 : 16)));
 					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
 					
 					

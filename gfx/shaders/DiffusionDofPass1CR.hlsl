@@ -34,123 +34,79 @@ void csPass1H(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 	
 	updateABCD(DTid.xy, abcd);
 }
+uint2 packf4(float4 v)
+{
+	return uint2(
+		f32tof16(v.x) | (f32tof16(v.y) << 16),
+		f32tof16(v.z) | (f32tof16(v.w) << 16));
+}
+float4 unpackf4(uint2 v)
+{
+	return float4(
+		f16tof32(v.x),
+		f16tof32(v.x >> 16),
+		f16tof32(v.y),
+		f16tof32(v.y >> 16));
+}
+#define PASS0_NUMTHREADS 64
+groupshared uint2 pass0_gsmem[PASS0_NUMTHREADS * 4]; //for depth,color
 
-#define PASS0_NUMTHREADS_X 8
-#define PASS0_NUMTHREADS_Y 8
-groupshared float2 depthcolor_gsmem[PASS0_NUMTHREADS_Y / 4 * PASS0_NUMTHREADS_X];
-
-[numthreads(PASS0_NUMTHREADS_X, PASS0_NUMTHREADS_Y, 1)]
+[numthreads(PASS0_NUMTHREADS, 1, 1)]
 void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;
 
-	int2 xy = int2(4 * DTid.x + 3, DTid.y);
+	//every threadgroup has 2 buffer threads on either end
+	int i0 = Gid.x * (PASS0_NUMTHREADS - 2) * 4; //3 elements before
 
-	//compute abcd for x - 3, to x + 3
-	float2 projConstants = g_proj_constants.xy;
-	float focalPlane = g_ddofVals.x;
-	float iterations = g_ddofVals.y;
-	//compute thread group's starting x in the original image
-	/*
-	int i0 = Gid.x * H_GROUPSIZE * 4 + GTid.x;
 	[unroll]
-	for(int i = 0; i < PASS0_NUMTHREADS_Y / 4; i++)
+	for(int i = 0; i < 4; i++)
 	{			
-		int2 threadReadIdx0 = (PASS0_NUMTHREADS_Y / 4) * i;
-	}
-	//coordinated read a block's depth/color
-	//compute + store beta and min(betaN, betaN+1) and same for backwards
-	//copy to local variable on relevant threads
+		int readIdx = i0 - 4 + PASS0_NUMTHREADS * i;
+		int writeIdx = i * PASS0_NUMTHREADS;
+		float betaN = betaX(g_depth, int2(GTid.x + readIdx, DTid.y), size);
+		pass0_gsmem[GTid.x + writeIdx] = packf4(float4(g_color[int2(GTid.x + readIdx, DTid.y)], betaN));
 
-	//read 1st batch [i0, i0 + GROUPSIZE) of color / beta into gsmem	
+	}
 	
-	//g_depth[int2(i0 + GTid.x, GTid.x ]
 	GroupMemoryBarrierWithGroupSync();
-	//read 2nd batch [iHalfN, iHalfN + GROUPSIZE) of color / beta into gsmem
-	int iHalfN = (Gid.x + 1) * (H_GROUPSIZE / 2) * 4;
-	GroupMemoryBarrierWithGroupSync();
-	//compute my own abcd
-	//optionally compute 0th abcd
-	*/
+	float betaLinks[8];
+	float3 d[7];
+	if(GTid.x == 0 || GTid.x == PASS0_NUMTHREADS - 1) return;
+
+	[unroll]
+	for(int i = 0; i < 7; i++)
+	{
+		//GTid.x is 1...n-2 here...
+		float4 cdB = unpackf4(pass0_gsmem[GTid.x * 4 + i]);
+		float4 cdA = unpackf4(pass0_gsmem[GTid.x * 4 + i - 1]);
+		betaLinks[i] = min(cdB.w, cdA.w);
+		d[i] = cdB.xyz;
+	}
+	betaLinks[7] = min(unpackf4(pass0_gsmem[GTid.x * 4 + 7]).w, unpackf4(pass0_gsmem[GTid.x * 4 + 6]).w);	
 	
-	float betaPrev = betaX(g_depth, xy - int2(3, 0) - int2(1, 0), size);
-	float betaCur = betaX(g_depth, xy - int2(3, 0), size);
-	float betaNext = 0;
-	float prevC = -min(betaPrev, betaCur);
-	ABCDTriple abcd;
-	int2 xyDelta = int2(1, 0);
+	ABCDEntry abcd[3];	
 	[unroll]
-	for(int i = -3; i < 0; i++)
-	{		
-		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
-		float betaForward = min(betaCur, betaNext);
+	for(int i = 0; i < 3; i++)
+	{
+		int baseIdx = i * 2;
+		ABCDTriple abcd3;
+		abcd3.a = float3(-betaLinks[baseIdx + 0], -betaLinks[baseIdx + 1], -betaLinks[baseIdx + 2]);
+		abcd3.b = float3(1 + betaLinks[baseIdx + 0] + betaLinks[baseIdx + 1],
+			1 + betaLinks[baseIdx + 1] + betaLinks[baseIdx + 2],
+			1 + betaLinks[baseIdx + 2] + betaLinks[baseIdx + 3]);
+		abcd3.c = float3(-betaLinks[baseIdx + 1], -betaLinks[baseIdx + 2], -betaLinks[baseIdx + 3]);
+		abcd3.d = float3x3(d[baseIdx + 0], d[baseIdx + 1], d[baseIdx + 2]);
 
-		int idx = i+3;
-		
-		abcd.a[idx] = prevC;
-		abcd.b[idx] = 1 - prevC + betaForward;
-		float c = -betaForward;
-		abcd.c[idx] = c;
-		abcd.d[idx] = g_color[xy + i * xyDelta];
-		prevC = c;
-		betaPrev = betaCur;
-		betaCur = betaNext;		
+		abcd[i] = reduce(abcd3);
 	}
-	ABCDEntry abcdA = reduce(abcd);
-	abcd.a[0] = abcd.a[2];
-	abcd.b[0] = abcd.b[2];
-	abcd.c[0] = abcd.c[2];
-	abcd.d[0] = abcd.d[2];
-	[unroll]
-	for(int i = 0; i < 2; i++)
-	{		
-		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
-		float betaForward = min(betaCur, betaNext);
-
-		//map i=0 to x[1] (we've already computed x[0])
-		int idx = i+1;
-		
-		abcd.a[idx] = prevC;
-		abcd.b[idx] = 1 - prevC + betaForward;
-		float c = -betaForward;
-		abcd.c[idx] = c;
-		abcd.d[idx] = g_color[xy + i * xyDelta];
-		prevC = c;
-		betaPrev = betaCur;
-		betaCur = betaNext;		
-	}
-	ABCDEntry abcdB = reduce(abcd);	
-	abcd.a[0] = abcd.a[2];
-	abcd.b[0] = abcd.b[2];
-	abcd.c[0] = abcd.c[2];
-	abcd.d[0] = abcd.d[2];
-	[unroll]
-	for(int i = 2; i < 4; i++)
-	{		
-		betaNext = betaX(g_depth, xy + int2(i + 1, 0), size);
-		float betaForward = min(betaCur, betaNext);
-
-		//map i=2 to x[1] (we've already computed x[0])
-		int idx = i - 1;
-		
-		abcd.a[idx] = prevC;
-		abcd.b[idx] = 1 - prevC + betaForward;
-		float c = -betaForward;
-		abcd.c[idx] = c;
-		abcd.d[idx] = g_color[xy + i * xyDelta];
-		prevC = c;
-		betaPrev = betaCur;
-		betaCur = betaNext;		
-	}
-	ABCDEntry abcdC = reduce(abcd);
-
 	ABCDTriple abcd3;
-	abcd3.a = float3(abcdA.a, abcdB.a, abcdC.a);
-	abcd3.b = float3(abcdA.b, abcdB.b, abcdC.b);
-	abcd3.c = float3(abcdA.c, abcdB.c, abcdC.c);
-	abcd3.d = float3x3(abcdA.d, abcdB.d, abcdC.d);
+	abcd3.a = float3(abcd[0].a, abcd[1].a, abcd[2].a);
+	abcd3.b = float3(abcd[0].b, abcd[1].b, abcd[2].b);
+	abcd3.c = float3(abcd[0].c, abcd[1].c, abcd[2].c);
+	abcd3.d = float3x3(abcd[0].d, abcd[1].d, abcd[2].d);
+	//GTid.x - 1 b/c we had a buffer of 1 thread at beginning
+	updateABCD(int2(Gid.x * (PASS0_NUMTHREADS - 2) + GTid.x - 1, DTid.y), abcd3);
 
-	updateABCD(DTid.xy, abcd3);
-	
 }
