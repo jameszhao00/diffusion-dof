@@ -196,6 +196,7 @@ namespace fx
 		CComPtr<ComputeShader> pass2H;
 		CComPtr<ComputeShader> pass2HLastPass;
 		CComPtr<ComputeShader> pass2HFirstPass;
+		CComPtr<ComputeShader> pcr;
 		vector<Texture2D> hABCDs;
 		vector<Texture2D> hYs;
 
@@ -205,24 +206,28 @@ namespace fx
 			this->gpuEnvironment = gpuEnvironment;
 			this->fxEnvironment = fxEnvironment;
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1H", "cs_5_0");			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1H", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1H);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1HPass0", "cs_5_0");			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass1CR.hlsl", "csPass1HPass0", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass1HP0);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2H", "cs_5_0");			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2H", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2H);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HPassLast", "cs_5_0");			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HPassLast", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HLastPass);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0");			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HFirstPass);
+			}
+			{
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPCR.hlsl", "ddofPcr", "cs_5_0");			
+				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pcr);
 			}
 			TwBar *bar = TwNewBar("Diffusion Dof CR");
 			dofCB.data.params.x = 5;

@@ -682,8 +682,8 @@ namespace fx
 			}
 		}
 	}
-	
 
+#define PCR_TG_SIZE_X 64
 	void DiffusionDofCR::execute( Gfx* gfx, 
 		Resource* inputColor, 
 		Resource* inputDepth, 
@@ -699,14 +699,15 @@ namespace fx
 			dofCB.data.params2.x = gpuEnvironment->vp_w;
 			dofCB.data.params2.y = gpuEnvironment->vp_h;
 
-			int passesCount = numPasses(gpuEnvironment->vp_w);
 			gfx->immediate_ctx->CSSetConstantBuffers(0, 1, &dofCB.cbuffer.p);
 			gfx->immediate_ctx->CSSetConstantBuffers(1, 1, &gpuEnvironment->fsquad_uniforms.p);
 			Texture2D* scratchABCDs[] = {scratchABCD1, scratchABCD2};
 			{
+				int passesCount = glm::ceil(log2((float)gpuEnvironment->vp_w / PCR_TG_SIZE_X));
 				//pass 0 and 1 collapsed into pass 1
 				for(int passIdx = 1; passIdx < passesCount; passIdx++)
 				{
+
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();
 					//TODO: don't create hABCDs[0]
@@ -726,7 +727,7 @@ namespace fx
 					}
 
 					float2 numThreads(entriesAtPass(gpuEnvironment->vp_w, passIdx), gpuEnvironment->vp_h);
-					float2 numGroups(glm::ceil(numThreads / float2(16, 16)));
+					float2 numGroups(glm::ceil(numThreads / float2(passIdx == 1 ? 8 : 16, passIdx == 1 ? 8 : 16)));
 					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
 					
 					
@@ -740,8 +741,31 @@ namespace fx
 					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
 					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
 				}	
+				{
+					//run pcr
+					UAVResource* uavs[1] = {hYs[passesCount - 1].uav};
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+
+					Resource* resources[3] = {hABCDs[passesCount - 1].srv, nullptr, nullptr};
+					gfx->immediate_ctx->CSSetShaderResources(0, 3, resources);	
+
+					gfx->immediate_ctx->CSSetShader(pcr, nullptr, 0);
+
+					gfx->immediate_ctx->Dispatch(1, gpuEnvironment->vp_h, 1);
+				}
+				
+				//cleanup
+				if(1)
+				{
+					Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
+					UAVResource* uavs[] = {nullptr, nullptr, nullptr};
+					gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
+					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+				}
 				//pass -1 and 0 collapsed into pass 0
-				for(int passIdx = passesCount - 1; passIdx > -1; passIdx--)
+				//start at passCount + 2 as pcr essentially solves a pass 
+				for(int passIdx = passesCount - 2; passIdx > -1; passIdx--)
 				{
 					dofCB.data.params.z = passIdx;
 					dofCB.sync();

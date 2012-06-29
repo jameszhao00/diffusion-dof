@@ -20,21 +20,27 @@ void updateABCD(int2 xy, ABCDTriple abcd)
 	float3 d = abcd.d[1] + m0 * abcd.d[0] + m1 * abcd.d[2];
 	g_abcdOut[xy] = ddofPack(a, b, c, d);
 }
+//MUST BE DIVISIBLE BY 4
 #define H_GROUPSIZE 16
 #define V_GROUPSIZE 16
+
 [numthreads(H_GROUPSIZE, V_GROUPSIZE, 1)]
-void csPass1H(uint3 DTid : SV_DispatchThreadID)
+void csPass1H(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;	
 	int2 xy = int2(2 * DTid.x + 1, DTid.y);
-
-	ABCDTriple abcd = readABCD(g_abcdIn, xy, int2(1, 0));
+	ABCDTriple abcd = readABCD(g_abcdIn, xy, int2(1, 0));		
+	
 	updateABCD(DTid.xy, abcd);
 }
 
-[numthreads(H_GROUPSIZE, V_GROUPSIZE, 1)]
-void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
+#define PASS0_NUMTHREADS_X 8
+#define PASS0_NUMTHREADS_Y 8
+groupshared float2 depthcolor_gsmem[PASS0_NUMTHREADS_Y / 4 * PASS0_NUMTHREADS_X];
+
+[numthreads(PASS0_NUMTHREADS_X, PASS0_NUMTHREADS_Y, 1)]
+void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;
@@ -45,6 +51,29 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	float2 projConstants = g_proj_constants.xy;
 	float focalPlane = g_ddofVals.x;
 	float iterations = g_ddofVals.y;
+	//compute thread group's starting x in the original image
+	/*
+	int i0 = Gid.x * H_GROUPSIZE * 4 + GTid.x;
+	[unroll]
+	for(int i = 0; i < PASS0_NUMTHREADS_Y / 4; i++)
+	{			
+		int2 threadReadIdx0 = (PASS0_NUMTHREADS_Y / 4) * i;
+	}
+	//coordinated read a block's depth/color
+	//compute + store beta and min(betaN, betaN+1) and same for backwards
+	//copy to local variable on relevant threads
+
+	//read 1st batch [i0, i0 + GROUPSIZE) of color / beta into gsmem	
+	
+	//g_depth[int2(i0 + GTid.x, GTid.x ]
+	GroupMemoryBarrierWithGroupSync();
+	//read 2nd batch [iHalfN, iHalfN + GROUPSIZE) of color / beta into gsmem
+	int iHalfN = (Gid.x + 1) * (H_GROUPSIZE / 2) * 4;
+	GroupMemoryBarrierWithGroupSync();
+	//compute my own abcd
+	//optionally compute 0th abcd
+	*/
+	
 	float betaPrev = betaX(g_depth, xy - int2(3, 0) - int2(1, 0), size);
 	float betaCur = betaX(g_depth, xy - int2(3, 0), size);
 	float betaNext = 0;
@@ -123,4 +152,5 @@ void csPass1HPass0(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThread
 	abcd3.d = float3x3(abcdA.d, abcdB.d, abcdC.d);
 
 	updateABCD(DTid.xy, abcd3);
+	
 }

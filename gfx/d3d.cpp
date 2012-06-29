@@ -161,7 +161,7 @@ void D3D::set_viewport(SIZE size)
 }
 void D3D::swap_buffers()
 {
-	//TwDraw();
+	TwDraw();
 	swap_chain->Present(0, 0);	
 }
 
@@ -294,16 +294,15 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 }
 namespace d3d
 {		
-	ID3D10Blob* load_shader(const wchar_t * file,
-		const char * entry, const char * profile)
+	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile, bool avoidFlowControl)
 	{
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
-		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
-			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
-			| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
-			//D3DCOMPILE_AVOID_FLOW_CONTROL | D3DCOMPILE_OPTIMIZATION_LEVEL3
-			, 0, 0, &shader_bin, &error_bin, nullptr);
+		auto flags = D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_ENABLE_STRICTNESS;
+		if(avoidFlowControl) flags |= D3DCOMPILE_AVOID_FLOW_CONTROL;
+		//D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
+		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, flags, 0, 0, &shader_bin, &error_bin, nullptr);
+
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
 		{
 			const char * msg = nullptr;

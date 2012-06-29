@@ -164,6 +164,7 @@ ABCDEntry computeABCDEntry(Texture2D<float> depthTex,
 ABCDEntry reduce(ABCDTriple abcd3)
 {	
 	ABCDEntry abcd;
+	
 	float m0 = abcd3.b[0] == 0 ? 0 : -(abcd3.a[1] / abcd3.b[0]);
 	float m1 = abcd3.b[2] == 0 ? 0 : -(abcd3.c[1] / abcd3.b[2]);
 

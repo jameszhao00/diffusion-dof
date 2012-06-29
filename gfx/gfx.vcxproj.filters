@@ -112,5 +112,6 @@
     <FxCompile Include="shaders\DiffusionDofPass1CR.hlsl" />
     <FxCompile Include="shaders\DiffusionDofPass2CR.hlsl" />
     <FxCompile Include="shaders\VisualizeStructuredBuffer.hlsl" />
+    <FxCompile Include="shaders\DiffusionDofPCR.hlsl" />
   </ItemGroup>
 </Project>

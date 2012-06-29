@@ -15,7 +15,7 @@ struct Window;
 int getref(IUnknown* ptr);
 namespace d3d
 {
-	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile);
+	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile, bool avoidFlowControl = false);
 	struct DrawOp
 	{
 		CComPtr<ID3D11Buffer> vb;

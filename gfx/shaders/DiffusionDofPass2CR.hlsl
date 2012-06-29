@@ -67,15 +67,12 @@ void csPass2HFirstPass(uint3 DTid : SV_DispatchThreadID)
 	float3 yB = (abcdBPass0.d - abcdBPass0.a * yAPass0 - abcdBPass0.c * yCPass0) / abcdBPass0.b;
 
 	g_yOut[xyB] = yB;
-	g_yOut[xyB - int2(2, 0)] = yAPass0;
-	
+	g_yOut[xyB - int2(2, 0)] = yAPass0;	
 
 	//for pass = -1
-	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b
-	
+	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b	
 	g_yOut[xyB - int2(1, 0)] = 
 		(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0];
-	
 	
 	g_yOut[xyB + int2(1, 0)] = 
 		(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2];
