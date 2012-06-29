@@ -1,5 +1,19 @@
 #include "shader.h"
 
+uint2 packf4(float4 v)
+{
+	return uint2(
+		f32tof16(v.x) | (f32tof16(v.y) << 16),
+		f32tof16(v.z) | (f32tof16(v.w) << 16));
+}
+float4 unpackf4(uint2 v)
+{
+	return float4(
+		f16tof32(v.x),
+		f16tof32(v.x >> 16),
+		f16tof32(v.y),
+		f16tof32(v.y >> 16));
+}
 //use odd entries
 cbuffer DDofCB
 {

@@ -20,34 +20,35 @@ void updateABCD(int2 xy, ABCDTriple abcd)
 	float3 d = abcd.d[1] + m0 * abcd.d[0] + m1 * abcd.d[2];
 	g_abcdOut[xy] = ddofPack(a, b, c, d);
 }
-//MUST BE DIVISIBLE BY 4
-#define H_GROUPSIZE 16
-#define V_GROUPSIZE 16
-
-[numthreads(H_GROUPSIZE, V_GROUPSIZE, 1)]
-void csPass1H(uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
+#define PASSN_NUMTHREADS 64
+groupshared uint4 passn_gsmem[PASSN_NUMTHREADS * 2]; //for depth,color
+[numthreads(PASSN_NUMTHREADS, 1, 1)]
+void csPass1H(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
+	//every threadgroup has a buffer at the end
+
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;	
-	int2 xy = int2(2 * DTid.x + 1, DTid.y);
-	ABCDTriple abcd = readABCD(g_abcdIn, xy, int2(1, 0));		
-	
-	updateABCD(DTid.xy, abcd);
+	//ABCDTriple abcd = readABCD(g_abcdIn, xy, int2(1, 0));		
+	int i0 = Gid.x * (PASSN_NUMTHREADS - 1) * 2;
+	[unroll]
+	for(int i = 0; i < 2; i++)
+	{
+		int readIdx = GTid.x + i0 + PASSN_NUMTHREADS * i;
+		int writeIdx = GTid.x + PASSN_NUMTHREADS * i;
+		uint4 abcd = g_abcdIn[int2(readIdx, DTid.y)];
+		passn_gsmem[writeIdx] = abcd;
+	}
+	GroupMemoryBarrierWithGroupSync();
+	if(GTid.x == PASSN_NUMTHREADS - 1) return;
+
+	ABCDTriple abcd3;
+	ddofUnpack(passn_gsmem[GTid.x * 2], abcd3.a[0], abcd3.b[0],  abcd3.c[0],  abcd3.d[0]);
+	ddofUnpack(passn_gsmem[GTid.x * 2 + 1], abcd3.a[1], abcd3.b[1],  abcd3.c[1],  abcd3.d[1]);
+	ddofUnpack(passn_gsmem[GTid.x * 2 + 2], abcd3.a[2], abcd3.b[2],  abcd3.c[2],  abcd3.d[2]);
+	updateABCD(int2(Gid.x * (PASSN_NUMTHREADS - 1) + GTid.x, DTid.y), abcd3);
 }
-uint2 packf4(float4 v)
-{
-	return uint2(
-		f32tof16(v.x) | (f32tof16(v.y) << 16),
-		f32tof16(v.z) | (f32tof16(v.w) << 16));
-}
-float4 unpackf4(uint2 v)
-{
-	return float4(
-		f16tof32(v.x),
-		f16tof32(v.x >> 16),
-		f16tof32(v.y),
-		f16tof32(v.y >> 16));
-}
+
 #define PASS0_NUMTHREADS 64
 groupshared uint2 pass0_gsmem[PASS0_NUMTHREADS * 4]; //for depth,color
 
@@ -62,19 +63,18 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 
 	[unroll]
 	for(int i = 0; i < 4; i++)
-	{			
+	{	
 		int readIdx = i0 - 4 + PASS0_NUMTHREADS * i;
 		int writeIdx = i * PASS0_NUMTHREADS;
 		float betaN = betaX(g_depth, int2(GTid.x + readIdx, DTid.y), size);
 		pass0_gsmem[GTid.x + writeIdx] = packf4(float4(g_color[int2(GTid.x + readIdx, DTid.y)], betaN));
-
 	}
 	
 	GroupMemoryBarrierWithGroupSync();
+	if(GTid.x == 0 || GTid.x == PASS0_NUMTHREADS - 1) return;
+	
 	float betaLinks[8];
 	float3 d[7];
-	if(GTid.x == 0 || GTid.x == PASS0_NUMTHREADS - 1) return;
-
 	[unroll]
 	for(int i = 0; i < 7; i++)
 	{
