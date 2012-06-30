@@ -50,7 +50,19 @@ void csPass1H(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid 
 }
 
 #define PASS0_NUMTHREADS 64
-groupshared uint2 pass0_gsmem[PASS0_NUMTHREADS * 4]; //for depth,color
+
+//weird [2] thing is to mitigate bank conflicts
+groupshared float p0gs_c[3][PASS0_NUMTHREADS * 4]; //color
+groupshared float p0gs_b[PASS0_NUMTHREADS * 4]; //beta
+
+void setc(int idx, float3 c)
+{
+	p0gs_c[0][idx] = c.x; p0gs_c[1][idx] = c.y; p0gs_c[2][idx] = c.z; 
+}
+float3 getc(int idx)
+{
+	return float3(p0gs_c[0][idx], p0gs_c[1][idx], p0gs_c[2][idx]);
+}
 
 [numthreads(PASS0_NUMTHREADS, 1, 1)]
 void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
@@ -67,7 +79,9 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 		int readIdx = i0 - 4 + PASS0_NUMTHREADS * i;
 		int writeIdx = i * PASS0_NUMTHREADS;
 		float betaN = betaX(g_depth, int2(GTid.x + readIdx, DTid.y), size);
-		pass0_gsmem[GTid.x + writeIdx] = packf4(float4(g_color[int2(GTid.x + readIdx, DTid.y)], betaN));
+		float3 color = g_color[int2(GTid.x + readIdx, DTid.y)];
+		setc(GTid.x + writeIdx, color);
+		p0gs_b[GTid.x + writeIdx] = betaN;
 	}
 	
 	GroupMemoryBarrierWithGroupSync();
@@ -75,16 +89,21 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 	
 	float betaLinks[8];
 	float3 d[7];
+	float lastBeta = p0gs_b[GTid.x * 4 - 1];
 	[unroll]
 	for(int i = 0; i < 7; i++)
 	{
+		int gsIdx = GTid.x * 4 + i;
 		//GTid.x is 1...n-2 here...
-		float4 cdA = unpackf4(pass0_gsmem[GTid.x * 4 + i - 1]);
-		float4 cdB = unpackf4(pass0_gsmem[GTid.x * 4 + i]);
-		betaLinks[i] = min(cdB.w, cdA.w);
-		d[i] = cdB.xyz;
+		float betaA = lastBeta;//p0gs_b[gsIdx-1];
+		float betaB = p0gs_b[gsIdx];
+		betaLinks[i] = min(betaA, betaB);
+		d[i] = getc(gsIdx);
+		//this only matters on the last loop (other writes will get erased by unroll)
+		lastBeta = betaB;
 	}
-	betaLinks[7] = min(unpackf4(pass0_gsmem[GTid.x * 4 + 7]).w, unpackf4(pass0_gsmem[GTid.x * 4 + 6]).w);	
+
+	betaLinks[7] = min(p0gs_b[GTid.x*4+7], lastBeta);	
 	
 	ABCDEntry abcd[3];	
 	[unroll]
@@ -107,6 +126,6 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 	abcd3.c = float3(abcd[0].c, abcd[1].c, abcd[2].c);
 	abcd3.d = float3x3(abcd[0].d, abcd[1].d, abcd[2].d);
 	//GTid.x - 1 b/c we had a buffer of 1 thread at beginning
-	updateABCD(int2(Gid.x * (PASS0_NUMTHREADS - 2) + GTid.x - 1, DTid.y), abcd3);
-
+	int2 writeTarget = int2(Gid.x * (PASS0_NUMTHREADS - 2) + GTid.x - 1, DTid.y);
+	updateABCD(writeTarget, abcd3);
 }

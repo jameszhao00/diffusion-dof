@@ -190,3 +190,24 @@ ABCDEntry reduce(ABCDTriple abcd3)
 	abcd.d = abcd3.d[1] + m0 * abcd3.d[0] + m1 * abcd3.d[2];
 	return abcd;
 }
+
+//bitmask for 11/10 low bits
+const static int X11 = 0xFFE0;
+const static int X10 = 0xFFC0;
+
+//r11g11b10 packing
+uint packf3(float3 v)
+{
+	return (
+		((f32tof16(v.x) & X11) << 16) |
+		((f32tof16(v.y) & X11) << 5) |
+		((f32tof16(v.z) & X10) >> 6)
+		);
+}
+float3 unpackf3(uint v)
+{
+	return float3(
+		f16tof32((v >> 16) & X11),
+		f16tof32((v >> 5) & X11),
+		f16tof32((v << 6) & X10));
+}

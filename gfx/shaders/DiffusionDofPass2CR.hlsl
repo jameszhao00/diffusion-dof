@@ -9,23 +9,6 @@ Texture2D<float3> g_yIn : register(t3);
 RWTexture2D<float3> g_yOut : register(u0);
 
 [numthreads(16, 16, 1)]
-void csPass2HPassLast(uint3 DTid : SV_DispatchThreadID)
-{
-	int passIdx = g_ddofVals.z;
-	float2 size = g_ddofVals2.xy;
-
-	int i = DTid.x;
-	//TODO: do we need this? seems xy is unused
-	int2 xy = int2(coordNOffset(DTid.x, passIdx), DTid.y);
-	if(xy.x > (size.x - 1)) return; //we're out of bounds	
-	if(xy.y > (size.y - 1)) return; //we're out of bounds	
-		
-	ABCDEntry abcd = ddofUnpack(g_abcdIn[DTid.xy]);
-
-	//0*yA + b*yB + 0*yC = xB ===> yB = xB / b ===> y = x/b			
-	g_yOut[int2(0, DTid.y)] = abcd.d / abcd.b;
-}
-[numthreads(16, 16, 1)]
 void csPass2H(uint3 DTid : SV_DispatchThreadID)
 {
 	//skip over the entries that are solved in an later passIdx
@@ -43,29 +26,21 @@ void csPass2H(uint3 DTid : SV_DispatchThreadID)
 	g_yOut[int2(DTid.x * 2 - 1, DTid.y)] = yA;
 	g_yOut[int2(DTid.x * 2, DTid.y)] = yB;
 }
-//bitmask for 11/10 low bits
-const static int X11 = 0xFFE0;
-const static int X10 = 0xFFC0;
-
-//r11g11b10 packing
-uint packf3(float3 v)
-{
-	return (
-		((f32tof16(v.x) & X11) << 16) |
-		((f32tof16(v.y) & X11) << 5) |
-		((f32tof16(v.z) & X10) >> 6)
-		);
-}
-float3 unpackf3(uint v)
-{
-	return float3(
-		f16tof32((v >> 16) & X11),
-		f16tof32((v >> 5) & X11),
-		f16tof32((v << 6) & X10));
-}
-#define PASS0_X_SIZE 8
+#define PASS0_X_SIZE 16
 #define PASS0_Y_SIZE 16
-groupshared uint pass0_gsmem[PASS0_Y_SIZE][PASS0_X_SIZE*4]; //for depth,color
+
+groupshared float pass0_gsmem[3][PASS0_Y_SIZE][PASS0_X_SIZE*4]; //for depth,color
+
+void setc(int2 ij, float3 c)
+{
+	pass0_gsmem[0][ij.x][ij.y] = c.x;
+	pass0_gsmem[1][ij.x][ij.y] = c.y;
+	pass0_gsmem[2][ij.x][ij.y] = c.z;
+}
+float3 getc(int2 ij)
+{
+	return float3(pass0_gsmem[0][ij.x][ij.y], pass0_gsmem[1][ij.x][ij.y], pass0_gsmem[2][ij.x][ij.y]);
+}
 //we have to reconstruct a,b,c,d
 [numthreads(PASS0_X_SIZE, PASS0_Y_SIZE, 1)]
 void csPass2HFirstPass(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
@@ -88,23 +63,23 @@ void csPass2HFirstPass(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, ui
 	//for pass = 0
 	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b
 	float3 yB = (abcdBPass0.d - abcdBPass0.a * yAPass0 - abcdBPass0.c * yCPass0) / abcdBPass0.b;
-
-	pass0_gsmem[GTid.y][GTid.x * 4 + 0] = packf3(yAPass0);
-	pass0_gsmem[GTid.y][GTid.x * 4 + 1] = packf3(
+	
+	setc(int2(GTid.y, GTid.x * 4 + 0), yAPass0);
+	setc(int2(GTid.y, GTid.x * 4 + 1), 
 		(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0]);
-	pass0_gsmem[GTid.y][GTid.x * 4 + 2] = packf3(yB);
-	pass0_gsmem[GTid.y][GTid.x * 4 + 3] = packf3(
+	setc(int2(GTid.y, GTid.x * 4 + 2), yB);
+	setc(int2(GTid.y, GTid.x * 4 + 3), 
 		(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2]);
-
 	GroupMemoryBarrierWithGroupSync();
 	//starts writing at xyB(0) - int2(2, 0)
 	int2 xy0 = int2(4 * Gid.x * PASS0_X_SIZE - 1, Gid.y * PASS0_Y_SIZE);
 	//successively write blocks to the right
+	[unroll]
 	for(int i = 0; i < 4; i++)
 	{
 		int2 outXY = xy0 + int2(i * PASS0_X_SIZE + GTid.x, GTid.y);
 		int2 inIJ = int2(i * PASS0_X_SIZE + GTid.x, GTid.y);
 		//write
-		g_yOut[outXY] = unpackf3(pass0_gsmem[inIJ.y][inIJ.x]);
+		g_yOut[outXY] = getc(inIJ.yx);
 	}
 }

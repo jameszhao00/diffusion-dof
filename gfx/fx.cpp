@@ -732,15 +732,6 @@ namespace fx
 					
 					
 				}
-				//cleanup
-				if(1)
-				{
-					Resource* resources[] = {nullptr, nullptr, nullptr, nullptr};
-					UAVResource* uavs[] = {nullptr, nullptr, nullptr};
-					gfx->immediate_ctx->PSSetShaderResources(0, 4, resources);
-					gfx->immediate_ctx->CSSetShaderResources(0, 4, resources);
-					gfx->immediate_ctx->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
-				}	
 				{
 					//run pcr
 					UAVResource* uavs[1] = {hYs[passesCount - 1].uav};
@@ -788,11 +779,6 @@ namespace fx
 						resources[3] = hYs[1].srv;
 						gfx->immediate_ctx->CSSetShader(pass2HFirstPass, nullptr, 0);
 					}
-					else if(passIdx == passesCount - 1) 
-					{
-						resources[0] = hABCDs[passIdx].srv;
-						gfx->immediate_ctx->CSSetShader(pass2HLastPass, nullptr, 0);
-					}
 					else
 					{
 						resources[0] = hABCDs[passIdx].srv;
@@ -807,7 +793,7 @@ namespace fx
 						entriesAtPass(gpuEnvironment->vp_w, passIdx)
 						- entriesAtPass(gpuEnvironment->vp_w, passIdx + 1), gpuEnvironment->vp_h
 						);
-					float2 numGroups(glm::ceil(numThreads / (passIdx == 0 ? float2(8, 16) : float2(16))));
+					float2 numGroups(glm::ceil(numThreads / (passIdx == 0 ? float2(16, 16) : float2(16))));
 					gfx->immediate_ctx->Dispatch((int)numGroups.x, (int)numGroups.y, 1);
 				}
 				

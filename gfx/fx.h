@@ -194,7 +194,6 @@ namespace fx
 		CComPtr<ComputeShader> pass1H;
 		CComPtr<ComputeShader> pass1HP0;
 		CComPtr<ComputeShader> pass2H;
-		CComPtr<ComputeShader> pass2HLastPass;
 		CComPtr<ComputeShader> pass2HFirstPass;
 		CComPtr<ComputeShader> pcr;
 		vector<Texture2D> hABCDs;
@@ -216,10 +215,6 @@ namespace fx
 			{
 				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2H", "cs_5_0", true);			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2H);
-			}
-			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HPassLast", "cs_5_0", true);			
-				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HLastPass);
 			}
 			{
 				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0");			
