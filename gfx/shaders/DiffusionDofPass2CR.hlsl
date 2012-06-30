@@ -43,70 +43,68 @@ void csPass2H(uint3 DTid : SV_DispatchThreadID)
 	g_yOut[int2(DTid.x * 2 - 1, DTid.y)] = yA;
 	g_yOut[int2(DTid.x * 2, DTid.y)] = yB;
 }
+//bitmask for 11/10 low bits
+const static int X11 = 0xFFE0;
+const static int X10 = 0xFFC0;
 
-#define PASS0_NUMTHREADS 64
-groupshared uint2 pass0_gsmem[PASS0_NUMTHREADS * 4]; //for depth,color
+//r11g11b10 packing
+uint packf3(float3 v)
+{
+	return (
+		((f32tof16(v.x) & X11) << 16) |
+		((f32tof16(v.y) & X11) << 5) |
+		((f32tof16(v.z) & X10) >> 6)
+		);
+}
+float3 unpackf3(uint v)
+{
+	return float3(
+		f16tof32((v >> 16) & X11),
+		f16tof32((v >> 5) & X11),
+		f16tof32((v << 6) & X10));
+}
+#define PASS0_X_SIZE 8
+#define PASS0_Y_SIZE 16
+groupshared uint pass0_gsmem[PASS0_Y_SIZE][PASS0_X_SIZE*4]; //for depth,color
 //we have to reconstruct a,b,c,d
-[numthreads(PASS0_NUMTHREADS, 1, 1)]
+[numthreads(PASS0_X_SIZE, PASS0_Y_SIZE, 1)]
 void csPass2HFirstPass(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 DTid : SV_DispatchThreadID)
 {
+	
 	//skip over the entries that are solved in an later passIdx
 	int passIdx = g_ddofVals.z;
-	float2 size = g_ddofVals2.xy;
 
-	int i0 = Gid.x * (PASS0_NUMTHREADS - 1) * 4 - 2; //starts after the previous entry
-	[unroll]
-	for(int i = 0; i < 4; i++)
-	{	
-		int readIdx = i0 + PASS0_NUMTHREADS * i;
-		int writeIdx = i * PASS0_NUMTHREADS;
-		float betaN = betaX(g_depth, int2(GTid.x + readIdx, DTid.y), size);
-		pass0_gsmem[GTid.x + writeIdx] = packf4(float4(g_color[int2(GTid.x + readIdx, DTid.y)], betaN));
-	}
-	
-	GroupMemoryBarrierWithGroupSync();
-	//buffer thread at the end of the group
-	if(GTid.x == PASS0_NUMTHREADS - 1) return;
-	
-	//pass0_gsmem[0] is 1 before what equation 1 is really made of!
+	float2 size = g_ddofVals2.xy;	
 
-	float betaLinks[4];
-	float3 d[3];
-	[unroll]
-	for(int i = 0; i < 3; i++)
-	{		
-		float4 cdA = unpackf4(pass0_gsmem[GTid.x * 4 + i + 1]);
-		float4 cdB = unpackf4(pass0_gsmem[GTid.x * 4 + i + 2]);
+	int2 xyB = int2(coordNOffset(DTid.x, 1), DTid.y) - calcXYDelta(int2(1, 0), 0);
 
-		betaLinks[i] = min(cdB.w, cdA.w);
-		d[i] = cdB.xyz;
-	}
-	betaLinks[3] = min(unpackf4(pass0_gsmem[GTid.x * 4 + 3 + 2]).w, unpackf4(pass0_gsmem[GTid.x * 4 + 3 + 1]).w);
-
-	ABCDTriple abcd3PassNeg1;
-	abcd3PassNeg1.a = float3(-betaLinks[0], -betaLinks[1], -betaLinks[2]);
-	abcd3PassNeg1.b = float3(1+betaLinks[0]+betaLinks[1], 1+betaLinks[1]+betaLinks[2], 1+betaLinks[2]+betaLinks[3]);
-	abcd3PassNeg1.c = float3(-betaLinks[1], -betaLinks[2], -betaLinks[3]);
-	abcd3PassNeg1.d = float3x3(d[0], d[1], d[2]);
+	ABCDTriple abcd3PassNeg1 = computeABCD(g_depth, g_color, xyB, 
+		int2(1, 0), size, g_proj_constants.xy, g_ddofVals.x, g_ddofVals.y);
 
 	ABCDEntry abcdBPass0 = reduce(abcd3PassNeg1);
-
-
 	
-	float3 yAPass0 = g_yIn[int2(Gid.x * (PASS0_NUMTHREADS - 1) + GTid.x - 1, DTid.y)];
-	float3 yCPass0 = g_yIn[int2(Gid.x * (PASS0_NUMTHREADS - 1) + GTid.x, DTid.y)];
+	float3 yAPass0 = g_yIn[DTid.xy - int2(1, 0)];
+	float3 yCPass0 = g_yIn[DTid.xy];
+	//for pass = 0
+	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b
 	float3 yB = (abcdBPass0.d - abcdBPass0.a * yAPass0 - abcdBPass0.c * yCPass0) / abcdBPass0.b;
-	int2 xyB = int2(Gid.x * (PASS0_NUMTHREADS - 1) * 4 + GTid.x * 4 + 1, DTid.y);
-	g_yOut[xyB] = yB;
-	g_yOut[xyB - int2(2, 0)] = yAPass0;	
 
+	pass0_gsmem[GTid.y][GTid.x * 4 + 0] = packf3(yAPass0);
+	pass0_gsmem[GTid.y][GTid.x * 4 + 1] = packf3(
+		(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0]);
+	pass0_gsmem[GTid.y][GTid.x * 4 + 2] = packf3(yB);
+	pass0_gsmem[GTid.y][GTid.x * 4 + 3] = packf3(
+		(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2]);
 
-	//for pass = -1
-	//a*yA + b*yB + c*yC = d ===> yB = (d - a*yA - c*yC) / b	
-	g_yOut[xyB - int2(1, 0)] = 
-		(abcd3PassNeg1.d[0] - abcd3PassNeg1.a[0] * yAPass0 - abcd3PassNeg1.c[0] * yB) / abcd3PassNeg1.b[0];
-	
-	g_yOut[xyB + int2(1, 0)] = 
-		(abcd3PassNeg1.d[2] - abcd3PassNeg1.a[2] * yB - abcd3PassNeg1.c[2] * yCPass0) / abcd3PassNeg1.b[2];
-	
+	GroupMemoryBarrierWithGroupSync();
+	//starts writing at xyB(0) - int2(2, 0)
+	int2 xy0 = int2(4 * Gid.x * PASS0_X_SIZE - 1, Gid.y * PASS0_Y_SIZE);
+	//successively write blocks to the right
+	for(int i = 0; i < 4; i++)
+	{
+		int2 outXY = xy0 + int2(i * PASS0_X_SIZE + GTid.x, GTid.y);
+		int2 inIJ = int2(i * PASS0_X_SIZE + GTid.x, GTid.y);
+		//write
+		g_yOut[outXY] = unpackf3(pass0_gsmem[inIJ.y][inIJ.x]);
+	}
 }
