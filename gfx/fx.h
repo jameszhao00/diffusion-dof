@@ -222,7 +222,7 @@ namespace fx
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HLastPass);
 			}
 			{
-				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0", true);			
+				CComPtr<ID3D10Blob> pass1Blob = d3d::load_shader(L"shaders/DiffusionDofPass2CR.hlsl", "csPass2HFirstPass", "cs_5_0");			
 				gfx->device->CreateComputeShader(pass1Blob->GetBufferPointer(), pass1Blob->GetBufferSize(), nullptr, &pass2HFirstPass);
 			}
 			{

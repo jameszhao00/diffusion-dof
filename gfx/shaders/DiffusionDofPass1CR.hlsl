@@ -58,8 +58,8 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 	int passIdx = g_ddofVals.z;
 	float2 size = g_ddofVals2.xy;
 
-	//every threadgroup has 2 buffer threads on either end
-	int i0 = Gid.x * (PASS0_NUMTHREADS - 2) * 4; //3 elements before
+	//every threadgroup has 2 buffer (not emitting) threads on either end
+	int i0 = Gid.x * (PASS0_NUMTHREADS - 2) * 4;
 
 	[unroll]
 	for(int i = 0; i < 4; i++)
@@ -79,8 +79,8 @@ void csPass1HPass0(uint3 Gid : SV_GroupId, uint3 GTid : SV_GroupThreadID, uint3 
 	for(int i = 0; i < 7; i++)
 	{
 		//GTid.x is 1...n-2 here...
-		float4 cdB = unpackf4(pass0_gsmem[GTid.x * 4 + i]);
 		float4 cdA = unpackf4(pass0_gsmem[GTid.x * 4 + i - 1]);
+		float4 cdB = unpackf4(pass0_gsmem[GTid.x * 4 + i]);
 		betaLinks[i] = min(cdB.w, cdA.w);
 		d[i] = cdB.xyz;
 	}
