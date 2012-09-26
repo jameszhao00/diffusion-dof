@@ -300,7 +300,7 @@ namespace d3d
 		ID3D10Blob * error_bin;
 		auto flags = D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_ENABLE_STRICTNESS;
 		if(avoidFlowControl) flags |= D3DCOMPILE_AVOID_FLOW_CONTROL;
-		//flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL;
+		flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL;
 		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, flags, 0, 0, &shader_bin, &error_bin, nullptr);
 
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
@@ -310,7 +310,7 @@ namespace d3d
 			{
 				msg = (const char *) error_bin->GetBufferPointer();
 			}
-			assert(false);
+				assert(false);
 		}
 		
 		return shader_bin;
