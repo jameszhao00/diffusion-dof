@@ -154,17 +154,17 @@ namespace package
 	}
 	void write_animation(ofstream& out, const gfx::Animation* animation)
 	{
-		int joints_count = animation->frames[0].bone_transforms->count;
+		int joints_count = animation->frames[0].bone_transforms.size();
 		bwrite(out, eAnimation);
 		bwrite(out, animation->frames.size());
-		bwrite(out, animation->frames[0].bone_transforms->count);
+		bwrite(out, animation->frames[0].bone_transforms.size());
 		for(int i = 0; i < animation->frames.size(); i++)
 		{					
-			assert(animation->frames[i].bone_transforms->byte_size == 
+			assert(animation->frames[i].byteSize() == 
 				(joints_count * sizeof(m44)));
-			int byte_size = animation->frames[i].bone_transforms->byte_size;
-			out.write((char*)animation->frames[i].bone_transforms->ptr, 
-				animation->frames[i].bone_transforms->byte_size);
+			int byte_size = animation->frames[i].byteSize();
+			out.write((char*)&(animation->frames[i].bone_transforms[0]), 
+				animation->frames[i].byteSize());
 		}
 	}
 	void load_package(const wchar_t* file, Package* package)
@@ -255,9 +255,9 @@ namespace package
 
 			}
 			//for(auto animation : model->animations)
-			for(auto it = model->animations.begin(); it != model->animations.end(); it++)
+			for(auto anim_it = model->animations.begin(); anim_it != model->animations.end(); anim_it++)
 			{
-				auto animation = *it;
+				auto animation = *anim_it;
 				write_animation(out, animation.get());	
 				assert(out.good());
 				written_animations_count ++;

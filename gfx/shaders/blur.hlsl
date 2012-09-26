@@ -31,7 +31,7 @@ BlurVS2PS vs(float3 position : POSITION)
 {	
 	BlurVS2PS OUT;
 	OUT.position = float4(position, 1);
-	OUT.uv = position.xy / 2 + .5;
+	OUT.uv = (float2(1, -1) * position.xy) / 2 + .5;
 	return OUT;
 }
 float4 blur(float2 uv, float2 offset_basis)

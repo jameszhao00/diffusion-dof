@@ -14,8 +14,6 @@
 #include <D3D11.h>
 #include <D3DX11.h>
 #include <D3DCompiler.h>
-//#include <DirectXMath.h>
-#include <xnamath.h>
 
 #include <stdio.h>
 #include <tchar.h>
@@ -29,4 +27,5 @@
 #include <IL/il.h>
 
 
-// TODO: reference additional headers your program requires here
+#include <glm/glm.hpp>
+#include <glm/ext.hpp>

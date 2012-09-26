@@ -4,6 +4,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+using namespace std;
 namespace gfx
 {
 	struct Model;
@@ -82,3 +83,49 @@ namespace package
 		in.read((char*)value, sizeof(T));
 	}
 }
+
+struct Serializer
+{
+	template<typename T>
+	void write(const T& data)
+	{
+		ofs.write((char*)&data, sizeof(T));
+	}
+	template<typename TItem>
+	void writeVec(const vector<TItem> container)
+	{
+		write(container.size());
+		for(const auto& entry : container)
+		{
+			write(entry);
+		}
+	}
+	template<>
+	void write(const string& data)
+	{
+		assert(false);
+	}
+	ofstream& ofs;
+};
+struct Deserializer
+{
+	template<typename T>
+	T read()
+	{
+		T data;
+		ifs.read((char*)&data, sizeof(T));
+		return data;
+	}
+	template<typename TItem>
+	void readVec(vector<TItem>& container)
+	{
+		assert(container.empty());
+		container.clear();
+		int numEntries = read<int>();
+		for(int i = 0; i < numEntries; i++)
+		{
+			container.push_back(read<TItem>());
+		}
+	}
+	ifstream& ifs;
+};

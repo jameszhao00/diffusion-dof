@@ -1,9 +1,12 @@
 #include "stdafx.h"
 
 #include <D3DCompiler.h>
+#include <iostream>
+#include <fstream>
 
 #include "d3d.h"
 #include "window.h"
+using namespace std;
 int getref(IUnknown* ptr)
 {
 	ptr->AddRef();
@@ -24,7 +27,7 @@ DXGI_SWAP_CHAIN_DESC make_swap_chain_desc(const Window & window)
 	swap_chain_desc.SampleDesc.Count = 1;
 	swap_chain_desc.SampleDesc.Quality = 0;
 	swap_chain_desc.Windowed = TRUE;
-	swap_chain_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	swap_chain_desc.Flags = 0;
 	return swap_chain_desc;
 }
 D3D11_TEXTURE2D_DESC make_depth_stencil_desc(SIZE size)
@@ -69,7 +72,6 @@ void D3D::create_draw_op(
 		int vb_stride,
 		unsigned int* ib, 
 		int indices_count,
-		ID3D11InputLayout* il,
 		d3d::DrawOp* draw_op)
 {
 	//WARNING: D3D11_BIND_SHADER_RESOURCE not usually necessary...
@@ -83,7 +85,6 @@ void D3D::create_draw_op(
 	d3d::name(draw_op->ib.p, "drawop ib");
 	draw_op->ib_count = indices_count;
 	draw_op->vb_stride = vb_stride;
-	draw_op->il.Attach(il);
 }
 
 void D3D::create_buffer(const char* data, int byte_size, D3D11_BIND_FLAG bind_flag, ID3D11Buffer** buf)
@@ -110,10 +111,10 @@ void D3D::init(Window & window)
 	swap_chain_desc = make_swap_chain_desc(window);
 
 	D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_RLDO_DETAIL, 
-									NULL, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
+									nullptr, 0, D3D11_SDK_VERSION, &swap_chain_desc, &swap_chain.p, 
 									&device.p, NULL, &immediate_ctx.p);
 		
-	window.resize_callback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
+	window.resizeCallback = std::bind(&D3D::window_resized, this, std::placeholders::_1);
 
 	ID3D11Texture2D * back_buffer;
 	swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
@@ -143,8 +144,7 @@ void D3D::init(Window & window)
 
 	set_viewport(window.size());
 
-	TwInit(TW_DIRECT3D11, device);
-	
+	TwInit(TW_DIRECT3D11, device);	
 }
 
 void D3D::set_viewport(SIZE size)
@@ -169,6 +169,7 @@ void D3D::window_resized(const Window * window)
 {
 	if(device)
 	{
+		
 		// Release render target and depth-stencil view
         ID3D11RenderTargetView * null_rtv = NULL;
 		immediate_ctx->OMSetRenderTargets(1, &null_rtv, NULL);
@@ -180,8 +181,8 @@ void D3D::window_resized(const Window * window)
         }
         if (dsv)
         {
-            dsv.Release();
 			depth_srv.Release();
+            dsv.Release();
             dsv = nullptr;
         }
 
@@ -190,7 +191,7 @@ void D3D::window_resized(const Window * window)
             // Resize swap chain
 			swap_chain_desc.BufferDesc.Width = window->size().cx;
             swap_chain_desc.BufferDesc.Height = window->size().cy;
-			swap_chain->ResizeBuffers(swap_chain_desc.BufferCount, swap_chain_desc.BufferDesc.Width, 
+			auto hr = swap_chain->ResizeBuffers(swap_chain_desc.BufferCount, swap_chain_desc.BufferDesc.Width, 
                                         swap_chain_desc.BufferDesc.Height, swap_chain_desc.BufferDesc.Format, 
                                         swap_chain_desc.Flags);
 
@@ -217,20 +218,11 @@ void D3D::window_resized(const Window * window)
             depth_buffer->Release();
 
 			set_viewport(window->size());
+
         }
 
 	}
 }
-void D3D::draw(const d3d::DrawOp & draw_op)
-{
-	unsigned int offset = 0;
-	immediate_ctx->IASetInputLayout(draw_op.il);
-	immediate_ctx->IASetVertexBuffers(0, 1, &draw_op.vb.p, &draw_op.vb_stride, &offset);
-	immediate_ctx->IASetIndexBuffer(draw_op.ib, DXGI_FORMAT_R32_UINT, 0);
-	immediate_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	immediate_ctx->DrawIndexed(draw_op.ib_count, 0, 0);
-}
-
 void D3D::create_shaders_and_il(const wchar_t * file, 
 	ID3D11VertexShader** vs, 
 	ID3D11PixelShader** ps,
@@ -250,7 +242,7 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 	ps_blob->Release();
 	if(gs != nullptr)
 	{
-		auto gs_blob = d3d::load_shader(file, "gs", "gs_4_0");
+		auto gs_blob = d3d::load_shader(file, "gs", "gs_5_0");
 		device->CreateGeometryShader(gs_blob->GetBufferPointer(), gs_blob->GetBufferSize(), nullptr, gs);
 		gs_blob->Release();
 	
@@ -302,15 +294,15 @@ void D3D::create_shaders_and_il(const wchar_t * file,
 }
 namespace d3d
 {		
-	ID3D10Blob* load_shader(const wchar_t * file,
-		const char * entry, const char * profile)
+	ID3D10Blob* load_shader(const wchar_t * file, const char * entry, const char * profile, bool avoidFlowControl)
 	{
 		ID3D10Blob * shader_bin;
 		ID3D10Blob * error_bin;
-		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, 0
-			D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG 
-			| D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL
-			, 0, 0, &shader_bin, &error_bin, nullptr);
+		auto flags = D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_ENABLE_STRICTNESS;
+		if(avoidFlowControl) flags |= D3DCOMPILE_AVOID_FLOW_CONTROL;
+		flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL;
+		auto hr = D3DX11CompileFromFile(file, nullptr, nullptr, entry, profile, flags, 0, 0, &shader_bin, &error_bin, nullptr);
+
 		if(FAILED(hr))//(error_bin != nullptr) || FAILED(hr))
 		{
 			const char * msg = nullptr;
@@ -318,7 +310,7 @@ namespace d3d
 			{
 				msg = (const char *) error_bin->GetBufferPointer();
 			}
-			assert(false);
+				assert(false);
 		}
 		
 		return shader_bin;

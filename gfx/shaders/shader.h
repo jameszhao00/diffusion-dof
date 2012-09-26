@@ -1,6 +1,11 @@
+
 #define MSAA_COUNT 1
-#define DEPTH_MAX 0
-#define DEPTH_MIN 1
+
+#define Z_FAR 300
+#define Z_NEAR 1
+
+//#define DEPTH_MAX 0
+//#define DEPTH_MIN 1
 
 #define MAX_BONES 64
 
@@ -9,10 +14,13 @@
 #define BLUE float4(0, 0, 1, 1)
 #define BACK float3(0, 0, -1)
 
+
+
 float unproject_z(float z, float2 proj_constants)
 {
 	return proj_constants[1] / (z - proj_constants[0]);
 }
+
 float3 get_vs_pos(float3 vs_ray, float ndc_z, float2 proj_constants)
 {
 	return vs_ray * unproject_z(ndc_z, proj_constants);
@@ -36,6 +44,15 @@ float3 vp_to_ndc(float2 vp_size, float2 vp, float z)
 	v.z = z;
 	return v;
 }
+/*
+float3 get_vs_ray(float2 vp_size, float2 vp_pos, float4x4 inv_p)
+{
+	float4 hcs = mul(float4(vp_to_ndc(vp_size, vp_pos, DEPTH_MAX), 1), inv_p);
+	float4 vs = normalize(hcs / hcs.w);
+	//vs ray's z HAS TO BE 1
+	return vs / vs.z;
+}
+*/
 float2 ndc_to_vp(float2 vp_size, float3 ndc)
 {
 	float2 v;
@@ -58,7 +75,12 @@ float2 vp_to_uv(float2 vp_size, float2 p)
 {
 	return p / vp_size;
 }
-
+float3 vs_to_ndc(float3 vs_pos, float4x4 proj)
+{
+	float4 r = mul(float4(vs_pos, 1), proj);
+	float3 ndc = r.xyz / r.w;
+	return ndc;
+}
 float2 vs_to_vp(float3 vs_pos, float2 vp_size, float4x4 proj)
 {
 	float4 r = mul(float4(vs_pos, 1), proj);
@@ -77,5 +99,9 @@ float in_vp_bounds(float2 pos, float2 vp_size)
 //is d1 closer than d2?
 float closer_ndc(float d1, float d2)
 {
-	return d1 > d2; //we use inverted depth
+	return d1 < d2; //we use inverted depth
+}
+float2 vp_pix_uv(float2 vp_size)
+{
+	return vp_to_uv(vp_size, float2(1, 1));
 }

@@ -6,10 +6,13 @@
 typedef HWND Handle;
 struct Window
 {
-	void init(HINSTANCE instance);
+	Window() : handle(nullptr), quitFlag(false) { }
+	void initialize(HINSTANCE instance);
 	SIZE size() const;
-	void call_resize_callback();
+	void handleEvents();
+	void handleResize();
+	void handleQuit();
 	Handle handle;
-	
-	std::function<void (const Window *)> resize_callback;
+	std::function<void (const Window *)> resizeCallback;
+	bool quitFlag;
 };
